@@ -1,0 +1,27 @@
+{% extends 'base.html' %}
+
+{% block title %}Recipes — StockEasy{% endblock %}
+
+{% block content %}
+<h1 class="mb-4">Recipes</h1>
+<table class="table table-striped">
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Portions</th>
+      <th>Created by</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for recipe in recipes %}
+    <tr>
+      <td>{{ recipe.name }}</td>
+      <td>{{ recipe.portions }}</td>
+      <td>{{ recipe.created_by.username }}</td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="3" class="text-muted">No recipes yet.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

@@ -1,0 +1,24 @@
+{% extends 'base.html' %}
+
+{% block title %}Login — StockEasy{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center mt-5">
+  <div class="col-md-4">
+    <h2 class="mb-4">Sign in</h2>
+    <form method="post">
+      {% csrf_token %}
+      {% for field in form %}
+        <div class="mb-3">
+          <label for="{{ field.id_for_label }}" class="form-label">{{ field.label }}</label>
+          {{ field }}
+          {% if field.errors %}
+            <div class="text-danger small">{{ field.errors }}</div>
+          {% endif %}
+        </div>
+      {% endfor %}
+      <button type="submit" class="btn btn-primary w-100">Sign in</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

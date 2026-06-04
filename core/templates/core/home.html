@@ -1,0 +1,36 @@
+{% extends 'base.html' %}
+
+{% block title %}Dashboard — StockEasy{% endblock %}
+
+{% block content %}
+<h1 class="mb-4">Dashboard</h1>
+<div class="row g-4">
+  <div class="col-md-4">
+    <div class="card">
+      <div class="card-body">
+        <h5 class="card-title">Inventory</h5>
+        <p class="card-text">Manage ingredients and stock levels.</p>
+        <a href="{% url 'inventory:ingredient_list' %}" class="btn btn-primary">Go to Inventory</a>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="card">
+      <div class="card-body">
+        <h5 class="card-title">Recipes</h5>
+        <p class="card-text">Create and manage recipes.</p>
+        <a href="{% url 'recipes:recipe_list' %}" class="btn btn-primary">Go to Recipes</a>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="card">
+      <div class="card-body">
+        <h5 class="card-title">Costing</h5>
+        <p class="card-text">Calculate costs and suggested prices.</p>
+        <a href="{% url 'costing:index' %}" class="btn btn-primary">Go to Costing</a>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

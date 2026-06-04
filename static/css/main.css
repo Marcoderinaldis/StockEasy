@@ -1,0 +1,16 @@
+body {
+    background-color: #f8f9fa;
+}
+
+.navbar-brand {
+    font-weight: 600;
+    letter-spacing: 0.02em;
+}
+
+main.container {
+    min-height: calc(100vh - 56px);
+}
+
+.table th {
+    font-weight: 600;
+}

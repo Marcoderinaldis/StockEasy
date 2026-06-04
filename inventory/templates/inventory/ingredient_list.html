@@ -1,0 +1,29 @@
+{% extends 'base.html' %}
+
+{% block title %}Inventory — StockEasy{% endblock %}
+
+{% block content %}
+<h1 class="mb-4">Inventory</h1>
+<table class="table table-striped">
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Unit</th>
+      <th>Cost per unit</th>
+      <th>Stock</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for ingredient in ingredients %}
+    <tr>
+      <td>{{ ingredient.name }}</td>
+      <td>{{ ingredient.unit.abbreviation }}</td>
+      <td>£{{ ingredient.cost_per_unit }}</td>
+      <td>{{ ingredient.stock_quantity }}</td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="4" class="text-muted">No ingredients yet.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}
