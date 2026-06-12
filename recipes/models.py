@@ -1,16 +1,23 @@
 from django.db import models
 from django.conf import settings
-from inventory.models import Ingredient
 
 
 class Recipe(models.Model):
-    name = models.CharField(max_length=200)
-    description = models.TextField(blank=True)
-    portions = models.PositiveIntegerField(default=1)
-    created_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
+    """Recipe definition with yield information."""
+
+    name = models.CharField(max_length=200, unique=True)
+    description = models.TextField(blank=True, null=True)
+    yields_quantity = models.DecimalField(max_digits=10, decimal_places=4)
+    yields_unit = models.ForeignKey(
+        'inventory.Unit',
         on_delete=models.PROTECT,
         related_name='recipes',
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='recipes_created',
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -23,12 +30,33 @@ class Recipe(models.Model):
 
 
 class RecipeIngredient(models.Model):
-    recipe = models.ForeignKey(Recipe, on_delete=models.CASCADE, related_name='recipe_ingredients')
-    ingredient = models.ForeignKey(Ingredient, on_delete=models.PROTECT, related_name='recipe_ingredients')
-    quantity = models.DecimalField(max_digits=10, decimal_places=3)
+    """
+    Individual ingredient in a recipe.
+
+    Unit can differ from product.unit; validation happens in service layer.
+    """
+
+    recipe = models.ForeignKey(
+        Recipe,
+        on_delete=models.CASCADE,
+        related_name='ingredients',
+    )
+    product = models.ForeignKey(
+        'inventory.Product',
+        on_delete=models.PROTECT,
+        related_name='recipe_ingredients',
+    )
+    quantity = models.DecimalField(max_digits=10, decimal_places=4)
+    unit = models.ForeignKey(
+        'inventory.Unit',
+        on_delete=models.PROTECT,
+        related_name='recipe_ingredients',
+    )
+    notes = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        unique_together = ('recipe', 'ingredient')
+        ordering = ['recipe', 'product']
 
     def __str__(self):
-        return f'{self.recipe.name} — {self.ingredient.name} x{self.quantity}'
+        return f"{self.recipe.name}: {self.product.name} x {self.quantity}"

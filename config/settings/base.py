@@ -20,6 +20,7 @@ INSTALLED_APPS = [
     'accounts',
     'core',
     'inventory',
+    'waste',
     'recipes',
     'costing',
 ]

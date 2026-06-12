@@ -80,3 +80,38 @@ Each entry follows a fixed structure to support traceability and future report w
 **Reason:** Avoids premature abstraction. The first skeleton must demonstrate working domain logic, not placeholder structure.
 **Alternatives considered:** Including reports as an empty app (rejected — adds no value and misleads the examiner about MVP scope).
 **Consequences:** CSV export and aggregated reporting are deferred to a later milestone.
+
+---
+
+## DEC-007 — Sprint 2 models complete with append-only StockMovement
+
+**Date:** 2026-06-12
+**Context:** StockEasy requires robust stock tracking with full audit trail. Stock movements must be immutable to ensure data integrity and GDPR compliance.
+**Decision:** Sprint 2 models complete. All 9 models created: Unit, Category, Product, PurchasePrice, StockMovement, WasteRecord, Recipe, RecipeIngredient. AuditLog via django-auditlog for automatic change tracking.
+**Reason:**
+- StockMovement is append-only — no updates or deletes ever allowed
+- Double-void prevention enforced in service layer (5-minute window check)
+- Unit conversion validation points defined at all quantity entry points
+- Service layer stubs ready for Sprint 3 implementation
+**Alternatives considered:** Mutable stock records with soft-delete (rejected — violates audit requirements and GDPR principles).
+**Consequences:**
+- All stock mutations must go through service layer functions
+- Direct Product.stock_quantity updates are never allowed
+- VOID movements reverse effects by creating new records, not modifying existing ones
+
+---
+
+## DEC-008 — Standardised waste categories across models
+
+**Date:** 2026-06-12
+**Context:** WasteRecord and StockMovement both need reason categorisation. Using different categories would complicate reporting and analysis.
+**Decision:** Six standardised waste/reason categories used across both models:
+1. Product expired
+2. Delivery damaged
+3. Counting error
+4. Spillage/accidental waste
+5. Void—entered in error
+6. Other
+**Reason:** Consistent categories enable unified waste reporting and trend analysis. Categories align with hospitality industry standards.
+**Alternatives considered:** Separate category lists for waste vs movements (rejected — complicates reporting).
+**Consequences:** Category changes require updating both StockMovement.REASON_CATEGORY_CHOICES and WasteRecord.WASTE_CATEGORY_CHOICES.

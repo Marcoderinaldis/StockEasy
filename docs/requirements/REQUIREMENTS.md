@@ -58,3 +58,49 @@ It enables managers and staff to track ingredient inventory, define recipes, and
 - POS integration
 - AI or machine learning features
 - Multi-venue support
+
+---
+
+## Sprint 2 Deliverables
+
+### Models Created (9 total)
+
+| Model | App | Key Features |
+|-------|-----|--------------|
+| Unit | inventory | Weight/Volume/Count types, conversion_to_base for unit conversion |
+| Category | inventory | Product grouping with is_active flag |
+| Product | inventory | Central stock entity, stock_quantity (service-layer only), reorder_level |
+| PurchasePrice | inventory | Historical pricing with effective_from/effective_to |
+| StockMovement | inventory | **Append-only**, 6 movement types, double-void prevention |
+| WasteRecord | waste | Linked to StockMovement, 6 standardised waste categories |
+| Recipe | recipes | yields_quantity + yields_unit for portion calculation |
+| RecipeIngredient | recipes | Unit can differ from product.unit (validated in service layer) |
+| CustomUser | accounts | 3 roles: Admin, Manager, Staff |
+
+### Key Constraints
+
+1. **StockMovement is append-only** — no updates or deletes ever allowed
+2. **Double-void prevention** — VOID rejected if another VOID exists for same product within 5 minutes
+3. **Unit conversion validation** — enforced everywhere quantities appear
+4. **All stock mutations via service layer** — direct Product.stock_quantity updates forbidden
+5. **6 standardised waste categories**:
+   - Product expired
+   - Delivery damaged
+   - Counting error
+   - Spillage/accidental waste
+   - Void—entered in error
+   - Other
+
+### Service Layer Stubs (Sprint 3 Implementation)
+
+- `inventory/services.py`: record_stock_in(), record_stock_out(), record_waste(), void_movement()
+- `waste/services.py`: record_waste_via_movement()
+- `recipes/services.py`: calculate_recipe_cost()
+- `costing/services.py`: calculate_product_cost()
+
+### Seed Data
+
+- 5 Units (kg, g, litres, ml, items)
+- 3 Categories (Produce, Dairy, Proteins)
+- 3 Products with initial PurchasePrices
+- Admin user (username: admin)

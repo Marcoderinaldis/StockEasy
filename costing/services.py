@@ -1,35 +1,60 @@
+"""
+Costing service layer for StockEasy.
+
+Provides product and recipe costing calculations.
+"""
+
 from decimal import Decimal
 
 
-def calculate_recipe_cost(recipe):
+def calculate_product_cost(product):
     """
-    Returns the total ingredient cost for a recipe.
-    Sums quantity * cost_per_unit for each RecipeIngredient.
+    Get the current cost per unit for a product.
+
+    Returns the most recent active PurchasePrice for the product.
+    An active price has effective_to=null.
+
+    Args:
+        product: Product instance to get cost for
+
+    Returns:
+        Decimal: Current unit price, or Decimal('0') if no active price exists
     """
-    total = Decimal('0.0000')
-    for ri in recipe.recipe_ingredients.select_related('ingredient'):
-        total += ri.quantity * ri.ingredient.cost_per_unit
-    return total
+    # TODO: Implement in Sprint 3
+    raise NotImplementedError("To be implemented in Sprint 3")
 
 
-def calculate_cost_per_portion(recipe):
+def get_price_history(product, start_date=None, end_date=None):
     """
-    Returns the cost per portion.
-    Raises ValueError if portions is zero or not set.
+    Get purchase price history for a product.
+
+    Args:
+        product: Product instance
+        start_date: Optional start date filter (inclusive)
+        end_date: Optional end date filter (inclusive)
+
+    Returns:
+        QuerySet: PurchasePrice records ordered by effective_from descending
     """
-    if not recipe.portions or recipe.portions == 0:
-        raise ValueError('Recipe must have at least one portion defined.')
-    return calculate_recipe_cost(recipe) / Decimal(recipe.portions)
+    # TODO: Implement in Sprint 3
+    raise NotImplementedError("To be implemented in Sprint 3")
 
 
-def suggest_selling_price(recipe, target_margin_pct):
+def suggest_selling_price(recipe, target_margin_percent):
     """
-    Returns a suggested selling price per portion based on a target gross margin.
-    target_margin_pct: integer or Decimal, e.g. 70 means 70% gross margin.
-    Formula: selling_price = cost_per_portion / (1 - margin)
+    Suggest a selling price based on target gross margin.
+
+    Formula: selling_price = cost_per_yield / (1 - margin)
+
+    Args:
+        recipe: Recipe instance
+        target_margin_percent: Target margin as percentage (e.g., 70 for 70%)
+
+    Returns:
+        Decimal: Suggested selling price per yield unit
+
+    Raises:
+        ValueError: If margin is not between 0 and 100 (exclusive)
     """
-    if not (0 < target_margin_pct < 100):
-        raise ValueError('Target margin must be between 0 and 100.')
-    margin = Decimal(str(target_margin_pct)) / Decimal('100')
-    cost = calculate_cost_per_portion(recipe)
-    return cost / (Decimal('1') - margin)
+    # TODO: Implement in Sprint 3
+    raise NotImplementedError("To be implemented in Sprint 3")
