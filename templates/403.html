@@ -1,0 +1,20 @@
+{% extends 'base.html' %}
+
+{% block title %}Access Denied - StockEasy{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center mt-5">
+  <div class="col-md-6">
+    <div class="card border-danger">
+      <div class="card-header bg-danger text-white">
+        <h4 class="mb-0">403 - Access Denied</h4>
+      </div>
+      <div class="card-body text-center">
+        <p class="lead">You do not have permission to access this page.</p>
+        <p class="text-muted">Your current role does not allow access to this resource.</p>
+        <a href="{% url 'core:home' %}" class="btn btn-primary">Return to Home</a>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

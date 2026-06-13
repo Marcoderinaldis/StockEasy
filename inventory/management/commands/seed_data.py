@@ -42,6 +42,40 @@ class Command(BaseCommand):
         else:
             self.stdout.write('Admin user already exists')
 
+        # Create Manager user for role testing
+        manager_user, created = CustomUser.objects.get_or_create(
+            username='manager',
+            defaults={
+                'email': 'manager@stockeasy.local',
+                'role': 'MANAGER',
+                'is_staff': False,
+                'is_superuser': False,
+            }
+        )
+        if created:
+            manager_user.set_password('manager123')
+            manager_user.save()
+            self.stdout.write(self.style.SUCCESS('Created manager user'))
+        else:
+            self.stdout.write('Manager user already exists')
+
+        # Create Staff user for role testing
+        staff_user, created = CustomUser.objects.get_or_create(
+            username='staff',
+            defaults={
+                'email': 'staff@stockeasy.local',
+                'role': 'STAFF',
+                'is_staff': False,
+                'is_superuser': False,
+            }
+        )
+        if created:
+            staff_user.set_password('staff123')
+            staff_user.save()
+            self.stdout.write(self.style.SUCCESS('Created staff user'))
+        else:
+            self.stdout.write('Staff user already exists')
+
         # Create Units
         units_data = [
             {
