@@ -1,0 +1,118 @@
+"""
+Stock movement forms for StockEasy.
+
+Staff can record IN and OUT movements only.
+WASTE, VOID, and ADJUSTMENT types are not exposed in this form.
+"""
+
+from decimal import Decimal, InvalidOperation
+
+from django import forms
+
+from .models import Product, Unit, StockMovement
+
+
+class StockMovementForm(forms.Form):
+    """
+    Form for recording stock IN and OUT movements.
+
+    Rules:
+    - movement_type limited to IN and OUT only
+    - reason_category required for OUT, not required for IN
+    - quantity must be positive
+    - unit must match product's unit_type
+    - note max 200 chars, optional
+    """
+
+    STAFF_MOVEMENT_CHOICES = [
+        ('IN', 'Stock In'),
+        ('OUT', 'Stock Out'),
+    ]
+
+    REASON_CHOICES = [
+        ('', '---------'),
+        ('Product expired', 'Product Expired'),
+        ('Delivery damaged', 'Delivery Damaged'),
+        ('Counting error', 'Counting Error'),
+        ('Spillage/accidental waste', 'Spillage/Accidental Waste'),
+        ('Void—entered in error', 'Void—Entered in Error'),
+        ('Other', 'Other'),
+    ]
+
+    product = forms.ModelChoiceField(
+        queryset=Product.objects.filter(is_active=True).select_related('unit'),
+        empty_label='Select a product',
+        widget=forms.Select(attrs={'class': 'form-select'}),
+    )
+
+    movement_type = forms.ChoiceField(
+        choices=STAFF_MOVEMENT_CHOICES,
+        widget=forms.Select(attrs={'class': 'form-select', 'id': 'id_movement_type'}),
+    )
+
+    quantity = forms.DecimalField(
+        max_digits=10,
+        decimal_places=4,
+        min_value=Decimal('0.0001'),
+        widget=forms.NumberInput(attrs={
+            'class': 'form-control',
+            'step': '0.0001',
+            'min': '0.0001',
+            'placeholder': 'Enter quantity',
+        }),
+    )
+
+    unit = forms.ModelChoiceField(
+        queryset=Unit.objects.all(),
+        empty_label='Select unit',
+        widget=forms.Select(attrs={'class': 'form-select'}),
+    )
+
+    reason_category = forms.ChoiceField(
+        choices=REASON_CHOICES,
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-select', 'id': 'id_reason_category'}),
+    )
+
+    note = forms.CharField(
+        max_length=200,
+        required=False,
+        widget=forms.Textarea(attrs={
+            'class': 'form-control',
+            'rows': 2,
+            'placeholder': 'Optional operational note. Do not include staff names unless necessary.',
+        }),
+    )
+
+    def clean_quantity(self):
+        """Ensure quantity is positive."""
+        quantity = self.cleaned_data.get('quantity')
+        if quantity is None:
+            raise forms.ValidationError('Quantity is required.')
+        if quantity <= Decimal('0'):
+            raise forms.ValidationError('Quantity must be positive.')
+        return quantity
+
+    def clean(self):
+        """
+        Cross-field validation:
+        - unit_type must match product's unit_type
+        - reason_category required for OUT movements
+        """
+        cleaned_data = super().clean()
+        product = cleaned_data.get('product')
+        unit = cleaned_data.get('unit')
+        movement_type = cleaned_data.get('movement_type')
+        reason_category = cleaned_data.get('reason_category')
+
+        if product and unit:
+            if product.unit.unit_type != unit.unit_type:
+                raise forms.ValidationError(
+                    f'Unit type mismatch: {unit.name} ({unit.unit_type}) '
+                    f'cannot be used with {product.name} ({product.unit.unit_type}).'
+                )
+
+        if movement_type == 'OUT' and not reason_category:
+            self.add_error('reason_category', 'Reason is required for Stock Out movements.')
+
+        return cleaned_data

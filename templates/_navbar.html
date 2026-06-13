@@ -10,7 +10,7 @@
       <ul class="navbar-nav me-auto">
         {% if user.is_staff_role %}
         <li class="nav-item">
-          <a class="nav-link" href="#">Record stock</a>
+          <a class="nav-link" href="{% url 'inventory:stock_movement_create' %}">Record stock</a>
         </li>
         <li class="nav-item">
           <a class="nav-link" href="#">Record waste</a>

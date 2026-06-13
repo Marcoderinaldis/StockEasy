@@ -76,6 +76,7 @@ urlpatterns = [
     path('test/admin-cbv/', AdminProtectedCBV.as_view(), name='test_admin_cbv'),
     path('', include('core.urls')),
     path('accounts/', include('accounts.urls')),
+    path('inventory/', include('inventory.urls')),
 ]
 
 

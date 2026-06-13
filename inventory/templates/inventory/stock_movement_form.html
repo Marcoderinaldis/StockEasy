@@ -1,0 +1,104 @@
+{% extends 'base.html' %}
+
+{% block title %}Record Stock Movement - StockEasy{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-8 col-lg-6">
+    <h1 class="mb-4">Record Stock Movement</h1>
+
+    {% if form.non_field_errors %}
+    <div class="alert alert-danger">
+      {% for error in form.non_field_errors %}
+        <p class="mb-0">{{ error }}</p>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <form method="post" novalidate>
+      {% csrf_token %}
+
+      <div class="mb-3">
+        <label for="id_product" class="form-label">Product</label>
+        {{ form.product }}
+        {% if form.product.errors %}
+          <div class="invalid-feedback d-block">{{ form.product.errors.0 }}</div>
+        {% endif %}
+      </div>
+
+      <div class="mb-3">
+        <label for="id_movement_type" class="form-label">Movement Type</label>
+        {{ form.movement_type }}
+        {% if form.movement_type.errors %}
+          <div class="invalid-feedback d-block">{{ form.movement_type.errors.0 }}</div>
+        {% endif %}
+      </div>
+
+      <div class="row">
+        <div class="col-md-6 mb-3">
+          <label for="id_quantity" class="form-label">Quantity</label>
+          {{ form.quantity }}
+          {% if form.quantity.errors %}
+            <div class="invalid-feedback d-block">{{ form.quantity.errors.0 }}</div>
+          {% endif %}
+        </div>
+        <div class="col-md-6 mb-3">
+          <label for="id_unit" class="form-label">Unit</label>
+          {{ form.unit }}
+          {% if form.unit.errors %}
+            <div class="invalid-feedback d-block">{{ form.unit.errors.0 }}</div>
+          {% endif %}
+          <small class="text-muted">Must match product's unit type</small>
+        </div>
+      </div>
+
+      <div class="mb-3" id="reason-container">
+        <label for="id_reason_category" class="form-label">
+          Reason <span class="text-muted" id="reason-required-hint">(required for Stock Out)</span>
+        </label>
+        {{ form.reason_category }}
+        {% if form.reason_category.errors %}
+          <div class="invalid-feedback d-block">{{ form.reason_category.errors.0 }}</div>
+        {% endif %}
+      </div>
+
+      <div class="mb-3">
+        <label for="id_note" class="form-label">Note <span class="text-muted">(optional)</span></label>
+        {{ form.note }}
+        {% if form.note.errors %}
+          <div class="invalid-feedback d-block">{{ form.note.errors.0 }}</div>
+        {% endif %}
+      </div>
+
+      <div class="d-grid gap-2">
+        <button type="submit" class="btn btn-primary btn-lg">Record Movement</button>
+        <a href="{% url 'core:home' %}" class="btn btn-outline-secondary">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const movementTypeSelect = document.getElementById('id_movement_type');
+    const reasonContainer = document.getElementById('reason-container');
+    const reasonSelect = document.getElementById('id_reason_category');
+    const reasonHint = document.getElementById('reason-required-hint');
+
+    function updateReasonVisibility() {
+        if (movementTypeSelect.value === 'OUT') {
+            reasonContainer.style.display = 'block';
+            reasonHint.textContent = '(required for Stock Out)';
+        } else {
+            reasonContainer.style.display = 'block';
+            reasonHint.textContent = '(optional for Stock In)';
+        }
+    }
+
+    movementTypeSelect.addEventListener('change', updateReasonVisibility);
+    updateReasonVisibility();
+});
+</script>
+{% endblock %}
