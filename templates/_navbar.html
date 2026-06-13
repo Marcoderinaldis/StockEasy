@@ -1,0 +1,55 @@
+{# Nav hrefs are placeholders; wired up per-unit as views are implemented #}
+{% if user.is_authenticated %}
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+  <div class="container-fluid">
+    <a class="navbar-brand" href="{% url 'core:home' %}">StockEasy</a>
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarNav">
+      <ul class="navbar-nav me-auto">
+        {% if user.is_staff_role %}
+        <li class="nav-item">
+          <a class="nav-link" href="#">Record stock</a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" href="#">Record waste</a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" href="#">Movements</a>
+        </li>
+        {% endif %}
+        {% if user.is_manager %}
+        <li class="nav-item">
+          <a class="nav-link" href="#">Void / correction</a>
+        </li>
+        {% endif %}
+        {% if user.is_admin %}
+        <li class="nav-item">
+          <a class="nav-link" href="{% url 'admin:index' %}">Admin</a>
+        </li>
+        {% endif %}
+      </ul>
+      <ul class="navbar-nav ms-auto">
+        <li class="nav-item">
+          <span class="navbar-text me-3">{{ user.username }}</span>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" href="{% url 'accounts:logout' %}">Logout</a>
+        </li>
+      </ul>
+    </div>
+  </div>
+</nav>
+{% else %}
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+  <div class="container-fluid">
+    <a class="navbar-brand" href="#">StockEasy</a>
+    <ul class="navbar-nav ms-auto">
+      <li class="nav-item">
+        <a class="nav-link" href="{% url 'accounts:login' %}">Login</a>
+      </li>
+    </ul>
+  </div>
+</nav>
+{% endif %}

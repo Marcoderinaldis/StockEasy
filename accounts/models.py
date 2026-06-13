@@ -19,12 +19,12 @@ class CustomUser(AbstractUser):
 
     @property
     def is_admin(self):
-        return self.role == self.Role.ADMIN
+        return self.role == self.Role.ADMIN or self.is_superuser
 
     @property
     def is_manager(self):
-        return self.role == self.Role.MANAGER
+        return self.role == self.Role.MANAGER or self.is_admin
 
     @property
-    def is_staff_member(self):
-        return self.role == self.Role.STAFF
+    def is_staff_role(self):
+        return self.role == self.Role.STAFF or self.is_manager
