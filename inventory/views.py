@@ -1,11 +1,15 @@
+from datetime import timedelta
+
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
+from django.core.paginator import Paginator
 from django.shortcuts import render, redirect
 from django.urls import reverse
+from django.utils import timezone
 
 from accounts.permissions import staff_required
-from .models import Product, Category, Unit
-from .forms import StockMovementForm
+from .models import Product, Category, Unit, StockMovement
+from .forms import StockMovementForm, MovementFilterForm
 from .services import (
     record_movement,
     StockValidationError,
@@ -73,3 +77,49 @@ def stock_movement_create(request):
         form = StockMovementForm()
 
     return render(request, 'inventory/stock_movement_form.html', {'form': form})
+
+
+@staff_required
+def movements_list(request):
+    """
+    Read-only paginated list of stock movements with filters.
+
+    Filters: product, movement_type, date_from, date_to.
+    NO user/recorded_by filter — per-person filtering is prohibited.
+
+    The 'recorded by' column is visible to managers/admins only.
+    Staff see the ledger without the recorder column.
+    """
+    queryset = StockMovement.objects.select_related('product', 'product__unit', 'recorded_by')
+
+    form = MovementFilterForm(request.GET or None)
+
+    if form.is_valid():
+        product = form.cleaned_data.get('product')
+        movement_type = form.cleaned_data.get('movement_type')
+        date_from = form.cleaned_data.get('date_from')
+        date_to = form.cleaned_data.get('date_to')
+
+        if product:
+            queryset = queryset.filter(product=product)
+
+        if movement_type:
+            queryset = queryset.filter(movement_type=movement_type)
+
+        if date_from:
+            queryset = queryset.filter(recorded_at__date__gte=date_from)
+
+        if date_to:
+            queryset = queryset.filter(recorded_at__date__lte=date_to)
+
+    paginator = Paginator(queryset, 25)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+
+    show_recorder_column = request.user.is_manager
+
+    return render(request, 'inventory/movements_list.html', {
+        'form': form,
+        'page_obj': page_obj,
+        'show_recorder_column': show_recorder_column,
+    })

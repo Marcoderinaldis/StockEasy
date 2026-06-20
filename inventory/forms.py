@@ -6,10 +6,66 @@ WASTE, VOID, and ADJUSTMENT types are not exposed in this form.
 """
 
 from decimal import Decimal, InvalidOperation
+from datetime import date
 
 from django import forms
 
 from .models import Product, Unit, StockMovement
+
+
+class MovementFilterForm(forms.Form):
+    """
+    Filter form for the movements list view.
+
+    Filters by product, movement_type, and date range.
+    NO user/recorded_by filter — per-person filtering is prohibited.
+    """
+
+    MOVEMENT_TYPE_FILTER_CHOICES = [
+        ('', 'All types'),
+        ('IN', 'Stock In'),
+        ('OUT', 'Stock Out'),
+    ]
+
+    product = forms.ModelChoiceField(
+        queryset=Product.objects.filter(is_active=True).order_by('name'),
+        required=False,
+        empty_label='All products',
+        widget=forms.Select(attrs={'class': 'form-select'}),
+    )
+
+    movement_type = forms.ChoiceField(
+        choices=MOVEMENT_TYPE_FILTER_CHOICES,
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-select'}),
+    )
+
+    date_from = forms.DateField(
+        required=False,
+        widget=forms.DateInput(attrs={
+            'class': 'form-control',
+            'type': 'date',
+        }),
+    )
+
+    date_to = forms.DateField(
+        required=False,
+        widget=forms.DateInput(attrs={
+            'class': 'form-control',
+            'type': 'date',
+        }),
+    )
+
+    def clean(self):
+        """Validate date range is sensible."""
+        cleaned_data = super().clean()
+        date_from = cleaned_data.get('date_from')
+        date_to = cleaned_data.get('date_to')
+
+        if date_from and date_to and date_from > date_to:
+            raise forms.ValidationError('Date from cannot be after date to.')
+
+        return cleaned_data
 
 
 class StockMovementForm(forms.Form):

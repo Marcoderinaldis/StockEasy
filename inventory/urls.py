@@ -8,4 +8,5 @@ urlpatterns = [
     path('categories/', views.category_list, name='category_list'),
     path('units/', views.unit_list, name='unit_list'),
     path('stock/record/', views.stock_movement_create, name='stock_movement_create'),
+    path('movements/', views.movements_list, name='movements_list'),
 ]
