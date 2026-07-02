@@ -172,3 +172,29 @@ class StockMovementForm(forms.Form):
             self.add_error('reason_category', 'Reason is required for Stock Out movements.')
 
         return cleaned_data
+
+
+class VoidMovementForm(forms.Form):
+    """
+    Form for voiding a stock movement.
+
+    Justification is mandatory — managers must explain why they are voiding.
+    """
+
+    justification = forms.CharField(
+        max_length=200,
+        required=True,
+        widget=forms.Textarea(attrs={
+            'class': 'form-control',
+            'rows': 3,
+            'placeholder': 'Explain why this movement is being voided (required).',
+        }),
+        error_messages={'required': 'Justification is required when voiding a movement.'},
+    )
+
+    def clean_justification(self):
+        """Ensure justification is not blank."""
+        justification = self.cleaned_data.get('justification')
+        if not justification or not justification.strip():
+            raise forms.ValidationError('Justification is required when voiding a movement.')
+        return justification.strip()

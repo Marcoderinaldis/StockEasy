@@ -151,6 +151,13 @@ class StockMovement(models.Model):
     )
     recorded_at = models.DateTimeField(auto_now_add=True)
     reference_id = models.CharField(max_length=50, blank=True, null=True)
+    voids = models.OneToOneField(
+        'self',
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='voided_by',
+    )
 
     class Meta:
         ordering = ['-recorded_at']

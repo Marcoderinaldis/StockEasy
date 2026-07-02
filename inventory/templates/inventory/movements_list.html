@@ -51,6 +51,9 @@
         {% if show_recorder_column %}
         <th>Recorded by</th>
         {% endif %}
+        {% if show_actions %}
+        <th>Actions</th>
+        {% endif %}
       </tr>
     </thead>
     <tbody>
@@ -59,15 +62,29 @@
         <td>{{ movement.recorded_at|date:"d M Y H:i" }}</td>
         <td>{{ movement.product.name }}</td>
         <td>
-          <span class="badge {% if movement.movement_type == 'IN' %}bg-success{% elif movement.movement_type == 'OUT' %}bg-danger{% else %}bg-secondary{% endif %}">
+          <span class="badge {% if movement.movement_type == 'IN' %}bg-success{% elif movement.movement_type == 'OUT' %}bg-danger{% elif movement.movement_type == 'WASTE' %}bg-warning{% elif movement.movement_type == 'VOID' %}bg-dark{% else %}bg-secondary{% endif %}">
             {{ movement.get_movement_type_display }}
           </span>
+          {% if movement.voided_by %}
+          <span class="badge bg-dark ms-1">Voided</span>
+          {% endif %}
         </td>
         <td>{{ movement.quantity }} {{ movement.product.unit.name }}</td>
         <td>{{ movement.reason_category|default:"-" }}</td>
         <td>{{ movement.reason_notes|default:"-"|truncatewords:10 }}</td>
         {% if show_recorder_column %}
         <td>{{ movement.recorded_by.username|default:"-" }}</td>
+        {% endif %}
+        {% if show_actions %}
+        <td>
+          {% if movement.movement_type in voidable_types and not movement.voided_by %}
+          <a href="{% url 'inventory:void_movement' movement.pk %}" class="btn btn-sm btn-outline-danger">Void</a>
+          {% elif movement.voided_by %}
+          <span class="text-muted">-</span>
+          {% else %}
+          <span class="text-muted">-</span>
+          {% endif %}
+        </td>
         {% endif %}
       </tr>
       {% endfor %}

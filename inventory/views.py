@@ -3,18 +3,21 @@ from datetime import timedelta
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.core.paginator import Paginator
-from django.shortcuts import render, redirect
+from django.shortcuts import render, redirect, get_object_or_404
 from django.urls import reverse
 from django.utils import timezone
 
-from accounts.permissions import staff_required
+from accounts.permissions import staff_required, manager_required
 from .models import Product, Category, Unit, StockMovement
-from .forms import StockMovementForm, MovementFilterForm
+from .forms import StockMovementForm, MovementFilterForm, VoidMovementForm
 from .services import (
     record_movement,
+    void_movement,
+    is_voided,
     StockValidationError,
     InsufficientStockError,
     UnitTypeMismatchError,
+    VOIDABLE_MOVEMENT_TYPES,
 )
 
 
@@ -89,8 +92,13 @@ def movements_list(request):
 
     The 'recorded by' column is visible to managers/admins only.
     Staff see the ledger without the recorder column.
+
+    The 'Actions' column (Void button) is visible to managers/admins only.
     """
-    queryset = StockMovement.objects.select_related('product', 'product__unit', 'recorded_by')
+    # Prefetch voided_by to avoid N+1 when checking is_voided
+    queryset = StockMovement.objects.select_related(
+        'product', 'product__unit', 'recorded_by', 'voided_by'
+    )
 
     form = MovementFilterForm(request.GET or None)
 
@@ -117,9 +125,64 @@ def movements_list(request):
     page_obj = paginator.get_page(page_number)
 
     show_recorder_column = request.user.is_manager
+    show_actions = request.user.is_manager
 
     return render(request, 'inventory/movements_list.html', {
         'form': form,
         'page_obj': page_obj,
         'show_recorder_column': show_recorder_column,
+        'show_actions': show_actions,
+        'voidable_types': VOIDABLE_MOVEMENT_TYPES,
+    })
+
+
+@manager_required
+def void_movement_view(request, pk):
+    """
+    Void a stock movement.
+
+    Manager-only. GET shows a confirmation form with the movement details.
+    POST validates justification and calls the service.
+    No direct stock mutation in this view — service only.
+    """
+    movement = get_object_or_404(
+        StockMovement.objects.select_related('product', 'product__unit', 'recorded_by'),
+        pk=pk
+    )
+
+    # Check if movement can be voided (for display purposes)
+    movement_is_voided = is_voided(movement)
+    can_void = (
+        movement.movement_type in VOIDABLE_MOVEMENT_TYPES
+        and not movement_is_voided
+    )
+
+    if request.method == 'POST':
+        form = VoidMovementForm(request.POST)
+        if form.is_valid():
+            try:
+                void_record = void_movement(
+                    movement=movement,
+                    reason_notes=form.cleaned_data['justification'],
+                    user=request.user,
+                )
+                messages.success(
+                    request,
+                    f'Movement voided: {movement.get_movement_type_display()} of '
+                    f'{movement.quantity} {movement.product.unit.name} '
+                    f'{movement.product.name} has been reversed.'
+                )
+                return redirect('inventory:movements_list')
+            except InsufficientStockError as e:
+                form.add_error(None, str(e))
+            except StockValidationError as e:
+                form.add_error(None, str(e))
+    else:
+        form = VoidMovementForm()
+
+    return render(request, 'inventory/void_movement.html', {
+        'form': form,
+        'movement': movement,
+        'can_void': can_void,
+        'movement_is_voided': movement_is_voided,
     })

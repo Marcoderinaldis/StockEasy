@@ -231,29 +231,119 @@ def record_stock_out(product, quantity, reason_category, reason_notes, user, ref
     )
 
 
+def is_voided(movement):
+    """
+    Check if a movement has been voided.
+
+    A movement is voided if a VOID movement points at it via the voids FK.
+    This is derived from the ledger — no mutable boolean flag.
+
+    Args:
+        movement: StockMovement instance to check
+
+    Returns:
+        bool: True if the movement has been voided
+    """
+    try:
+        return movement.voided_by is not None
+    except StockMovement.DoesNotExist:
+        return False
+
+
+# Movement types that can be voided
+VOIDABLE_MOVEMENT_TYPES = ('IN', 'OUT', 'WASTE')
+
+
 def void_movement(movement, reason_notes, user):
     """
     Void an existing stock movement by creating a VOID movement.
 
     StockMovement is append-only, so this creates a new VOID movement
-    that reverses the effect of the original movement.
+    that reverses the effect of the original movement and links to it.
 
-    Double-void prevention: If a VOID movement exists for the same product
-    within the last 5 minutes, this function will reject the request.
+    Double-void prevention is enforced at both the service layer (pre-check)
+    and the database layer (OneToOne constraint on voids FK).
 
     Args:
         movement: StockMovement instance to void
-        reason_notes: Reason for voiding (required)
+        reason_notes: Reason for voiding (required - mandatory justification)
         user: CustomUser who is voiding the movement
 
     Returns:
         StockMovement: The created VOID movement record
 
     Raises:
-        ValueError: If movement is already a VOID type
-        ValueError: If double-void detected (VOID exists for same product in last 5 mins)
+        StockValidationError: If movement cannot be voided (already voided,
+            is a VOID, unsupported type, or missing justification)
+        InsufficientStockError: If voiding would make stock negative
     """
-    raise NotImplementedError("To be implemented in Unit 6")
+    # Validate justification is provided (mandatory)
+    if not reason_notes or not reason_notes.strip():
+        raise StockValidationError('Justification is required when voiding a movement.')
+
+    # Validate movement type is not VOID
+    if movement.movement_type == 'VOID':
+        raise StockValidationError('Cannot void a void.')
+
+    # Validate movement type is voidable
+    if movement.movement_type not in VOIDABLE_MOVEMENT_TYPES:
+        raise StockValidationError('This movement type cannot be voided.')
+
+    # Pre-check if already voided (service-level check before DB constraint)
+    if is_voided(movement):
+        raise StockValidationError('This movement has already been voided.')
+
+    # Get the original quantity (already stored in product units on the ledger)
+    original_quantity = _quantize_quantity(movement.quantity)
+
+    with transaction.atomic():
+        # Re-fetch and lock the product row
+        locked_product = Product.objects.select_for_update().get(pk=movement.product_id)
+
+        # Re-fetch the movement inside the transaction to ensure consistency
+        locked_movement = StockMovement.objects.select_for_update().get(pk=movement.pk)
+
+        # Double-check voided status inside transaction
+        if is_voided(locked_movement):
+            raise StockValidationError('This movement has already been voided.')
+
+        # Compute the reversal effect on stock
+        # IN added stock -> reversal SUBTRACTS
+        # OUT subtracted stock -> reversal ADDS
+        # WASTE subtracted stock -> reversal ADDS
+        if locked_movement.movement_type == 'IN':
+            # Voiding an IN: subtract the quantity back
+            new_stock = _quantize_quantity(
+                locked_product.stock_quantity - original_quantity
+            )
+            if new_stock < Decimal('0'):
+                raise InsufficientStockError(
+                    'Cannot void: stock has since been consumed and would go negative. '
+                    f'Available: {locked_product.stock_quantity} {locked_product.unit.name}. '
+                    f'Required to reverse: {original_quantity} {locked_product.unit.name}.'
+                )
+        else:
+            # Voiding an OUT or WASTE: add the quantity back
+            new_stock = _quantize_quantity(
+                locked_product.stock_quantity + original_quantity
+            )
+
+        # Apply the reversal to product stock
+        locked_product.stock_quantity = new_stock
+        locked_product.save(update_fields=['stock_quantity', 'updated_at'])
+
+        # Create the VOID movement linked to the original
+        void_record = StockMovement.objects.create(
+            product=locked_product,
+            quantity=original_quantity,
+            movement_type='VOID',
+            reason_category='Void—entered in error',
+            reason_notes=reason_notes.strip(),
+            recorded_by=user,
+            voids=locked_movement,
+        )
+
+    return void_record
 
 
 def record_adjustment_in(product, quantity, reason_category, reason_notes, user, reference_id=None):
