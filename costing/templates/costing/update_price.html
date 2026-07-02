@@ -1,0 +1,70 @@
+{% extends 'base.html' %}
+
+{% block title %}Update Price — StockEasy{% endblock %}
+
+{% block content %}
+<nav aria-label="breadcrumb" class="mb-3">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="{% url 'costing:costing_home' %}">Product Prices</a></li>
+    <li class="breadcrumb-item active" aria-current="page">Update Price</li>
+  </ol>
+</nav>
+
+<h1 class="mb-4">Update Product Price</h1>
+
+{% if product and current_price %}
+<div class="alert alert-info">
+  <strong>Current price for {{ product.name }}:</strong>
+  £{{ current_price.unit_price|floatformat:2 }} per {{ product.unit.name }}
+  (since {{ current_price.effective_from|date:"d M Y H:i" }})
+</div>
+{% elif product %}
+<div class="alert alert-warning">
+  <strong>{{ product.name }}</strong> has no current price set.
+</div>
+{% endif %}
+
+<div class="row">
+  <div class="col-md-6">
+    <form method="post">
+      {% csrf_token %}
+
+      <div class="mb-3">
+        <label for="id_product" class="form-label">Product</label>
+        {{ form.product }}
+        {% if form.product.errors %}
+        <div class="invalid-feedback d-block">
+          {% for error in form.product.errors %}{{ error }}{% endfor %}
+        </div>
+        {% endif %}
+        {% if form.product.help_text %}
+        <div class="form-text">{{ form.product.help_text }}</div>
+        {% endif %}
+      </div>
+
+      <div class="mb-3">
+        <label for="id_unit_price" class="form-label">New Price (£)</label>
+        {{ form.unit_price }}
+        {% if form.unit_price.errors %}
+        <div class="invalid-feedback d-block">
+          {% for error in form.unit_price.errors %}{{ error }}{% endfor %}
+        </div>
+        {% endif %}
+        {% if form.unit_price.help_text %}
+        <div class="form-text">{{ form.unit_price.help_text }}</div>
+        {% endif %}
+      </div>
+
+      <div class="d-flex gap-2">
+        <button type="submit" class="btn btn-primary">Update Price</button>
+        <a href="{% url 'costing:costing_home' %}" class="btn btn-outline-secondary">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<hr class="my-4">
+<p class="text-muted small">
+  Price changes are tracked. The old price will be marked as closed, and a new price record will be created.
+</p>
+{% endblock %}

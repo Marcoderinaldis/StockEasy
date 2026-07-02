@@ -1,0 +1,42 @@
+{% extends 'base.html' %}
+
+{% block title %}Recipe Costing — StockEasy{% endblock %}
+
+{% block content %}
+<nav aria-label="breadcrumb" class="mb-3">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="{% url 'costing:costing_home' %}">Product Prices</a></li>
+    <li class="breadcrumb-item active" aria-current="page">Recipe Costing</li>
+  </ol>
+</nav>
+
+<h1 class="mb-4">Recipe Costing</h1>
+<p class="text-muted mb-3">Cost breakdown by recipe. Full calculations coming in Sprint 4.</p>
+
+<table class="table table-striped align-middle">
+  <thead>
+    <tr>
+      <th>Recipe</th>
+      <th>Portions</th>
+      <th>Total Cost</th>
+      <th>Cost per Portion</th>
+      <th>Suggested Price</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for row in costing_data %}
+    <tr>
+      <td>{{ row.recipe.name }}</td>
+      <td>{{ row.recipe.portions }}</td>
+      <td>{% if row.total_cost %}£{{ row.total_cost|floatformat:2 }}{% else %}&mdash;{% endif %}</td>
+      <td>{% if row.cost_per_portion %}£{{ row.cost_per_portion|floatformat:2 }}{% else %}&mdash;{% endif %}</td>
+      <td>{% if row.suggested_price %}£{{ row.suggested_price|floatformat:2 }}{% else %}&mdash;{% endif %}</td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="5" class="text-muted">No recipes yet.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<a href="{% url 'costing:costing_home' %}" class="btn btn-outline-secondary">Back to Product Prices</a>
+{% endblock %}

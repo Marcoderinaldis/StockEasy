@@ -4,5 +4,10 @@ from . import views
 app_name = 'costing'
 
 urlpatterns = [
-    path('', views.index, name='index'),
+    path('', views.costing_home, name='costing_home'),
+    path('prices/', views.costing_home, name='index'),  # Alias for backward compatibility
+    path('prices/<int:product_id>/history/', views.price_history, name='price_history'),
+    path('prices/update/', views.update_price, name='update_price'),
+    path('prices/<int:product_id>/update/', views.update_price, name='update_price_for_product'),
+    path('recipes/', views.recipe_costing, name='recipe_costing'),
 ]

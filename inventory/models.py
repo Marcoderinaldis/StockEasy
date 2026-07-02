@@ -69,6 +69,19 @@ class Product(models.Model):
     def __str__(self):
         return self.name
 
+    @property
+    def current_price(self):
+        """
+        Return the current active PurchasePrice for this product.
+
+        An active price has effective_to=null. Returns the most recent one
+        if multiple exist (ordered by -effective_from).
+
+        Returns:
+            PurchasePrice or None if no active price exists.
+        """
+        return self.prices.filter(effective_to__isnull=True).order_by('-effective_from').first()
+
 
 class PurchasePrice(models.Model):
     """Historical pricing for products. effective_to=null means still active."""
