@@ -13,6 +13,7 @@ from inventory.models import Product, StockMovement
 from inventory.services import (
     convert_quantity_between_units,
     _quantize_quantity,
+    _snapshot_unit_cost,
     StockValidationError,
     InsufficientStockError,
     UnitTypeMismatchError,
@@ -90,6 +91,7 @@ def record_waste(product, quantity, unit, waste_category, user, notes=None):
         stock_movement = StockMovement.objects.create(
             product=locked_product,
             quantity=quantity_in_product_unit,
+            unit_cost_snapshot=_snapshot_unit_cost(locked_product),
             movement_type='WASTE',
             reason_category=waste_category,
             reason_notes=notes or None,

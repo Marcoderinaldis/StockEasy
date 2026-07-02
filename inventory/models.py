@@ -143,6 +143,14 @@ class StockMovement(models.Model):
         related_name='movements',
     )
     quantity = models.DecimalField(max_digits=10, decimal_places=4)
+    unit_cost_snapshot = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text='Unit price (per product unit) frozen at the time this movement '
+                  'was recorded. Null if no price existed. Never updated.',
+    )
     movement_type = models.CharField(max_length=20, choices=MOVEMENT_TYPE_CHOICES)
     reason_category = models.CharField(
         max_length=100,

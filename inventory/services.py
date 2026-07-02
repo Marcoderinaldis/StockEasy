@@ -77,6 +77,17 @@ def convert_quantity_between_units(quantity, from_unit, to_unit):
     return _quantize_quantity(converted_quantity)
 
 
+def _snapshot_unit_cost(product):
+    """
+    Return the current unit price for a product, frozen for a stock movement.
+
+    Reads the product's active price at call time. Returns None when no active
+    price exists — a movement must never be blocked because a price is missing.
+    """
+    price = product.current_price
+    return price.unit_price if price is not None else None
+
+
 def record_movement(
     product,
     movement_type,
@@ -154,6 +165,7 @@ def record_movement(
         movement = StockMovement.objects.create(
             product=locked_product,
             quantity=quantity_in_product_unit,
+            unit_cost_snapshot=_snapshot_unit_cost(locked_product),
             movement_type=movement_type,
             reason_category=reason_category or None,
             reason_notes=reason_notes or None,
@@ -336,6 +348,7 @@ def void_movement(movement, reason_notes, user):
         void_record = StockMovement.objects.create(
             product=locked_product,
             quantity=original_quantity,
+            unit_cost_snapshot=locked_movement.unit_cost_snapshot,
             movement_type='VOID',
             reason_category='Void—entered in error',
             reason_notes=reason_notes.strip(),
@@ -493,6 +506,7 @@ def correct_movement(
         void_record = StockMovement.objects.create(
             product=locked_product,
             quantity=original_quantity,
+            unit_cost_snapshot=locked_original.unit_cost_snapshot,
             movement_type='VOID',
             reason_category='Void—entered in error',
             reason_notes=justification.strip(),
@@ -504,6 +518,7 @@ def correct_movement(
         replacement = StockMovement.objects.create(
             product=locked_product,
             quantity=corrected_qty_in_product_unit,
+            unit_cost_snapshot=_snapshot_unit_cost(locked_product),
             movement_type=locked_original.movement_type,
             reason_category=corrected_reason_category or None,
             reason_notes=corrected_notes or None,
