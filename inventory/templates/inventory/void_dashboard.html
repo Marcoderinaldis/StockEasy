@@ -33,11 +33,11 @@
   {% endif %}
 </form>
 
-{# Section 1: Voidable Worklist #}
+{# Section 1: Voidable/Correctable Worklist #}
 <div class="card mb-4">
   <div class="card-header bg-warning text-dark">
-    <strong>Voidable Worklist</strong>
-    <small class="ms-2">(movements that can still be voided)</small>
+    <strong>Voidable / Correctable Worklist</strong>
+    <small class="ms-2">(movements that can still be voided or corrected)</small>
   </div>
   <div class="card-body">
     {% if voidable_page %}
@@ -68,7 +68,8 @@
             <td>{{ movement.reason_category|default:"-" }}</td>
             <td>{{ movement.reason_notes|default:"-"|truncatewords:10 }}</td>
             <td>
-              <a href="{% url 'inventory:void_movement' movement.pk %}" class="btn btn-sm btn-outline-danger">Void</a>
+              <a href="{% url 'inventory:void_movement' movement.pk %}" class="btn btn-sm btn-outline-danger me-1">Void</a>
+              <a href="{% url 'inventory:correct_movement' movement.pk %}" class="btn btn-sm btn-outline-primary">Correct</a>
             </td>
           </tr>
           {% endfor %}
@@ -112,11 +113,11 @@
   </div>
 </div>
 
-{# Section 2: Void History #}
+{# Section 2: Void & Correction History #}
 <div class="card">
   <div class="card-header bg-dark text-white">
-    <strong>Void History</strong>
-    <small class="ms-2">(corrections already made)</small>
+    <strong>Void & Correction History</strong>
+    <small class="ms-2">(voids and corrections already made)</small>
   </div>
   <div class="card-body">
     {% if history_page %}
@@ -126,10 +127,11 @@
           <tr>
             <th>Date/Time</th>
             <th>Product</th>
-            <th>Quantity</th>
+            <th>Action</th>
             <th>Original Type</th>
+            <th>Quantity Change</th>
             <th>Justification</th>
-            <th>Voided by</th>
+            <th>By</th>
           </tr>
         </thead>
         <tbody>
@@ -137,7 +139,13 @@
           <tr>
             <td>{{ void_movement.recorded_at|date:"d M Y H:i" }}</td>
             <td>{{ void_movement.product.name }}</td>
-            <td>{{ void_movement.quantity }} {{ void_movement.product.unit.name }}</td>
+            <td>
+              {% if void_movement.voids.corrected_by.exists %}
+              <span class="badge bg-info">Corrected</span>
+              {% else %}
+              <span class="badge bg-dark">Voided</span>
+              {% endif %}
+            </td>
             <td>
               {% if void_movement.voids %}
               <span class="badge {% if void_movement.voids.movement_type == 'IN' %}bg-success{% elif void_movement.voids.movement_type == 'OUT' %}bg-danger{% elif void_movement.voids.movement_type == 'WASTE' %}bg-warning{% else %}bg-secondary{% endif %}">
@@ -145,6 +153,15 @@
               </span>
               {% else %}
               <span class="text-muted">-</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if void_movement.voids.corrected_by.exists %}
+                {% with replacement=void_movement.voids.corrected_by.first %}
+                {{ void_movement.voids.quantity }} -> {{ replacement.quantity }} {{ void_movement.product.unit.name }}
+                {% endwith %}
+              {% else %}
+              {{ void_movement.quantity }} {{ void_movement.product.unit.name }}
               {% endif %}
             </td>
             <td>{{ void_movement.reason_notes|default:"-"|truncatewords:10 }}</td>
@@ -186,7 +203,7 @@
     {% endif %}
 
     {% else %}
-    <p class="text-muted mb-0">No void history found{% if form.product.value or form.date_from.value or form.date_to.value %} matching your filters{% endif %}.</p>
+    <p class="text-muted mb-0">No void or correction history found{% if form.product.value or form.date_from.value or form.date_to.value %} matching your filters{% endif %}.</p>
     {% endif %}
   </div>
 </div>

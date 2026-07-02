@@ -200,6 +200,94 @@ class VoidMovementForm(forms.Form):
         return justification.strip()
 
 
+class CorrectMovementForm(forms.Form):
+    """
+    Form for correcting a stock movement.
+
+    Corrected quantity and unit required. Product and type are NOT editable
+    (display only in template). Justification is mandatory.
+    """
+
+    REASON_CHOICES = [
+        ('', '---------'),
+        ('Product expired', 'Product Expired'),
+        ('Delivery damaged', 'Delivery Damaged'),
+        ('Counting error', 'Counting Error'),
+        ('Spillage/accidental waste', 'Spillage/Accidental Waste'),
+        ('Void—entered in error', 'Void—Entered in Error'),
+        ('Other', 'Other'),
+    ]
+
+    corrected_quantity = forms.DecimalField(
+        max_digits=10,
+        decimal_places=4,
+        min_value=Decimal('0.0001'),
+        widget=forms.NumberInput(attrs={
+            'class': 'form-control',
+            'step': '0.0001',
+            'min': '0.0001',
+            'placeholder': 'Enter corrected quantity',
+        }),
+    )
+
+    corrected_unit = forms.ModelChoiceField(
+        queryset=Unit.objects.all(),
+        empty_label='Select unit',
+        widget=forms.Select(attrs={'class': 'form-select'}),
+    )
+
+    corrected_reason_category = forms.ChoiceField(
+        choices=REASON_CHOICES,
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-select'}),
+    )
+
+    corrected_notes = forms.CharField(
+        max_length=200,
+        required=False,
+        widget=forms.Textarea(attrs={
+            'class': 'form-control',
+            'rows': 2,
+            'placeholder': 'Optional operational note. Do not include staff names unless necessary.',
+        }),
+    )
+
+    justification = forms.CharField(
+        max_length=200,
+        required=True,
+        widget=forms.Textarea(attrs={
+            'class': 'form-control',
+            'rows': 3,
+            'placeholder': 'Explain why this movement is being corrected (required).',
+        }),
+        error_messages={'required': 'Justification is required when correcting a movement.'},
+    )
+
+    def __init__(self, *args, product=None, **kwargs):
+        """Accept product to filter units by matching unit_type."""
+        super().__init__(*args, **kwargs)
+        if product:
+            self.fields['corrected_unit'].queryset = Unit.objects.filter(
+                unit_type=product.unit.unit_type
+            )
+
+    def clean_corrected_quantity(self):
+        """Ensure corrected quantity is positive."""
+        quantity = self.cleaned_data.get('corrected_quantity')
+        if quantity is None:
+            raise forms.ValidationError('Corrected quantity is required.')
+        if quantity <= Decimal('0'):
+            raise forms.ValidationError('Corrected quantity must be positive.')
+        return quantity
+
+    def clean_justification(self):
+        """Ensure justification is not blank."""
+        justification = self.cleaned_data.get('justification')
+        if not justification or not justification.strip():
+            raise forms.ValidationError('Justification is required when correcting a movement.')
+        return justification.strip()
+
+
 class VoidDashboardFilterForm(forms.Form):
     """
     Filter form for the void dashboard.

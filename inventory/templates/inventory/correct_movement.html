@@ -1,0 +1,150 @@
+{% extends 'base.html' %}
+
+{% block title %}Correct Movement - StockEasy{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-8 col-lg-6">
+    <h1 class="mb-4">Correct Movement</h1>
+
+    <div class="card mb-4">
+      <div class="card-header">
+        <strong>Original Movement</strong>
+      </div>
+      <div class="card-body">
+        <dl class="row mb-0">
+          <dt class="col-sm-4">Date/Time</dt>
+          <dd class="col-sm-8">{{ movement.recorded_at|date:"d M Y H:i" }}</dd>
+
+          <dt class="col-sm-4">Product</dt>
+          <dd class="col-sm-8">{{ movement.product.name }}</dd>
+
+          <dt class="col-sm-4">Type</dt>
+          <dd class="col-sm-8">
+            <span class="badge {% if movement.movement_type == 'IN' %}bg-success{% elif movement.movement_type == 'OUT' %}bg-danger{% elif movement.movement_type == 'WASTE' %}bg-warning{% else %}bg-secondary{% endif %}">
+              {{ movement.get_movement_type_display }}
+            </span>
+            {% if movement_is_voided %}
+            <span class="badge bg-dark ms-1">Voided</span>
+            {% endif %}
+            {% if movement_is_corrected %}
+            <span class="badge bg-info ms-1">Corrected</span>
+            {% endif %}
+          </dd>
+
+          <dt class="col-sm-4">Original Quantity</dt>
+          <dd class="col-sm-8">{{ movement.quantity }} {{ movement.product.unit.name }}</dd>
+
+          {% if movement.reason_category %}
+          <dt class="col-sm-4">Original Reason</dt>
+          <dd class="col-sm-8">{{ movement.reason_category }}</dd>
+          {% endif %}
+
+          {% if movement.reason_notes %}
+          <dt class="col-sm-4">Original Note</dt>
+          <dd class="col-sm-8">{{ movement.reason_notes }}</dd>
+          {% endif %}
+        </dl>
+      </div>
+    </div>
+
+    {% if not can_correct %}
+    <div class="alert alert-warning">
+      {% if movement_is_voided %}
+      This movement has already been voided and cannot be corrected.
+      {% elif movement_is_corrected %}
+      This movement has already been corrected.
+      {% elif movement.movement_type == 'VOID' %}
+      VOID movements cannot be corrected.
+      {% else %}
+      This movement type ({{ movement.get_movement_type_display }}) cannot be corrected.
+      {% endif %}
+    </div>
+    <a href="{% url 'inventory:void_dashboard' %}" class="btn btn-outline-secondary">Back to Dashboard</a>
+    {% else %}
+
+    <div class="alert alert-info">
+      <strong>What happens when you correct:</strong>
+      <ul class="mb-0 mt-2">
+        <li>The original movement will be voided</li>
+        <li>A new movement with the corrected quantity will be created</li>
+        <li>Stock will be adjusted to reflect the net change</li>
+        <li>Both the void and replacement will appear in the ledger</li>
+      </ul>
+    </div>
+
+    {% if form.non_field_errors %}
+    <div class="alert alert-danger">
+      {% for error in form.non_field_errors %}
+        <p class="mb-0">{{ error }}</p>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <form method="post" novalidate>
+      {% csrf_token %}
+
+      <div class="card mb-4">
+        <div class="card-header bg-primary text-white">
+          <strong>Corrected Values</strong>
+        </div>
+        <div class="card-body">
+          <div class="row mb-3">
+            <div class="col-md-6">
+              <label for="id_corrected_quantity" class="form-label">
+                Corrected Quantity <span class="text-danger">*</span>
+              </label>
+              {{ form.corrected_quantity }}
+              {% if form.corrected_quantity.errors %}
+                <div class="invalid-feedback d-block">{{ form.corrected_quantity.errors.0 }}</div>
+              {% endif %}
+            </div>
+            <div class="col-md-6">
+              <label for="id_corrected_unit" class="form-label">
+                Unit <span class="text-danger">*</span>
+              </label>
+              {{ form.corrected_unit }}
+              {% if form.corrected_unit.errors %}
+                <div class="invalid-feedback d-block">{{ form.corrected_unit.errors.0 }}</div>
+              {% endif %}
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label for="id_corrected_reason_category" class="form-label">Reason Category</label>
+            {{ form.corrected_reason_category }}
+            {% if form.corrected_reason_category.errors %}
+              <div class="invalid-feedback d-block">{{ form.corrected_reason_category.errors.0 }}</div>
+            {% endif %}
+          </div>
+
+          <div class="mb-3">
+            <label for="id_corrected_notes" class="form-label">Notes</label>
+            {{ form.corrected_notes }}
+            {% if form.corrected_notes.errors %}
+              <div class="invalid-feedback d-block">{{ form.corrected_notes.errors.0 }}</div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+
+      <div class="mb-3">
+        <label for="id_justification" class="form-label">
+          Justification <span class="text-danger">*</span>
+        </label>
+        {{ form.justification }}
+        {% if form.justification.errors %}
+          <div class="invalid-feedback d-block">{{ form.justification.errors.0 }}</div>
+        {% endif %}
+        <small class="text-muted">Explain why this movement is being corrected.</small>
+      </div>
+
+      <div class="d-grid gap-2">
+        <button type="submit" class="btn btn-primary btn-lg">Correct This Movement</button>
+        <a href="{% url 'inventory:void_dashboard' %}" class="btn btn-outline-secondary">Cancel</a>
+      </div>
+    </form>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

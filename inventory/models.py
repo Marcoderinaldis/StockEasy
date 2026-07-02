@@ -158,6 +158,13 @@ class StockMovement(models.Model):
         blank=True,
         related_name='voided_by',
     )
+    corrects = models.ForeignKey(
+        'self',
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='corrected_by',
+    )
 
     class Meta:
         ordering = ['-recorded_at']

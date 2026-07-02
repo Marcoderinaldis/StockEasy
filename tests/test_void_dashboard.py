@@ -484,18 +484,18 @@ class VoidDashboardTemplateTests(TestCase):
         self.assertContains(response, 'Void / Correction Dashboard')
 
     def test_has_voidable_worklist_section(self):
-        """Page has voidable worklist section."""
+        """Page has voidable/correctable worklist section."""
         self.client.login(username='manageruser', password='testpass123')
         response = self.client.get(self.url)
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'Voidable Worklist')
+        self.assertContains(response, 'Voidable / Correctable Worklist')
 
     def test_has_void_history_section(self):
-        """Page has void history section."""
+        """Page has void & correction history section."""
         self.client.login(username='manageruser', password='testpass123')
         response = self.client.get(self.url)
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'Void History')
+        self.assertContains(response, 'Void & Correction History')
 
     def test_has_filter_form(self):
         """Page has filter form."""
@@ -518,7 +518,7 @@ class VoidDashboardTemplateTests(TestCase):
         self.client.login(username='manageruser', password='testpass123')
         response = self.client.get(self.url)
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'No void history found')
+        self.assertContains(response, 'No void or correction history found')
 
 
 @override_settings(ROOT_URLCONF=__name__)

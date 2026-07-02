@@ -77,9 +77,12 @@
         {% endif %}
         {% if show_actions %}
         <td>
-          {% if movement.movement_type in voidable_types and not movement.voided_by %}
-          <a href="{% url 'inventory:void_movement' movement.pk %}" class="btn btn-sm btn-outline-danger">Void</a>
+          {% if movement.movement_type in voidable_types and not movement.voided_by and not movement.corrected_by.exists %}
+          <a href="{% url 'inventory:void_movement' movement.pk %}" class="btn btn-sm btn-outline-danger me-1">Void</a>
+          <a href="{% url 'inventory:correct_movement' movement.pk %}" class="btn btn-sm btn-outline-primary">Correct</a>
           {% elif movement.voided_by %}
+          <span class="text-muted">-</span>
+          {% elif movement.corrected_by.exists %}
           <span class="text-muted">-</span>
           {% else %}
           <span class="text-muted">-</span>

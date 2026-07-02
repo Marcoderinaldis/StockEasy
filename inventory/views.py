@@ -9,15 +9,18 @@ from django.utils import timezone
 
 from accounts.permissions import staff_required, manager_required
 from .models import Product, Category, Unit, StockMovement
-from .forms import StockMovementForm, MovementFilterForm, VoidMovementForm, VoidDashboardFilterForm
+from .forms import StockMovementForm, MovementFilterForm, VoidMovementForm, VoidDashboardFilterForm, CorrectMovementForm
 from .services import (
     record_movement,
     void_movement,
+    correct_movement,
     is_voided,
+    is_corrected,
     StockValidationError,
     InsufficientStockError,
     UnitTypeMismatchError,
     VOIDABLE_MOVEMENT_TYPES,
+    CORRECTABLE_MOVEMENT_TYPES,
 )
 
 
@@ -95,9 +98,11 @@ def movements_list(request):
 
     The 'Actions' column (Void button) is visible to managers/admins only.
     """
-    # Prefetch voided_by to avoid N+1 when checking is_voided
+    # Prefetch voided_by and corrected_by to avoid N+1 when checking status
     queryset = StockMovement.objects.select_related(
         'product', 'product__unit', 'recorded_by', 'voided_by'
+    ).prefetch_related(
+        'corrected_by'
     )
 
     form = MovementFilterForm(request.GET or None)
@@ -189,13 +194,85 @@ def void_movement_view(request, pk):
 
 
 @manager_required
+def correct_movement_view(request, pk):
+    """
+    Correct a stock movement.
+
+    Manager-only. GET shows a correction form with the original movement details.
+    POST validates and calls the correct_movement service.
+    No direct stock mutation in this view — service only.
+    """
+    movement = get_object_or_404(
+        StockMovement.objects.select_related('product', 'product__unit', 'recorded_by'),
+        pk=pk
+    )
+
+    # Check if movement can be corrected (for display purposes)
+    movement_is_voided = is_voided(movement)
+    movement_is_corrected = is_corrected(movement)
+    can_correct = (
+        movement.movement_type in CORRECTABLE_MOVEMENT_TYPES
+        and not movement_is_voided
+        and not movement_is_corrected
+    )
+
+    if request.method == 'POST':
+        form = CorrectMovementForm(request.POST, product=movement.product)
+        if form.is_valid():
+            try:
+                replacement = correct_movement(
+                    original=movement,
+                    corrected_quantity=form.cleaned_data['corrected_quantity'],
+                    corrected_unit=form.cleaned_data['corrected_unit'],
+                    corrected_reason_category=form.cleaned_data.get('corrected_reason_category') or None,
+                    corrected_notes=form.cleaned_data.get('corrected_notes') or None,
+                    justification=form.cleaned_data['justification'],
+                    user=request.user,
+                )
+                messages.success(
+                    request,
+                    f'Movement corrected: {movement.get_movement_type_display()} of '
+                    f'{movement.quantity} {movement.product.unit.name} '
+                    f'{movement.product.name} corrected to {replacement.quantity} '
+                    f'{replacement.product.unit.name}.'
+                )
+                return redirect('inventory:void_dashboard')
+            except InsufficientStockError as e:
+                form.add_error(None, str(e))
+            except UnitTypeMismatchError as e:
+                form.add_error('corrected_unit', str(e))
+            except StockValidationError as e:
+                form.add_error(None, str(e))
+    else:
+        # Pre-fill with original values
+        form = CorrectMovementForm(
+            product=movement.product,
+            initial={
+                'corrected_quantity': movement.quantity,
+                'corrected_unit': movement.product.unit,
+                'corrected_reason_category': movement.reason_category or '',
+                'corrected_notes': movement.reason_notes or '',
+            }
+        )
+
+    return render(request, 'inventory/correct_movement.html', {
+        'form': form,
+        'movement': movement,
+        'can_correct': can_correct,
+        'movement_is_voided': movement_is_voided,
+        'movement_is_corrected': movement_is_corrected,
+    })
+
+
+@manager_required
 def void_dashboard(request):
     """
     Void/correction dashboard for managers.
 
     Two sections:
-    1. Voidable worklist — movements that CAN still be voided (IN, OUT, WASTE not yet voided)
-    2. Void history — VOID movements that have been recorded
+    1. Voidable/Correctable worklist — movements that CAN still be voided/corrected
+       (IN, OUT, WASTE not yet voided or corrected)
+    2. Void & Correction History — VOID movements with labels for pure void vs correction
 
     Manager-only (staff get 403).
     NO user/recorded_by filter — per-person filtering is prohibited.
@@ -203,16 +280,25 @@ def void_dashboard(request):
     form = VoidDashboardFilterForm(request.GET or None)
 
     # Base querysets with prefetch to avoid N+1
+    # Exclude movements that are already voided OR already corrected
     voidable_base = StockMovement.objects.select_related(
         'product', 'product__unit', 'recorded_by'
+    ).prefetch_related(
+        'corrected_by'  # Prefetch to check is_corrected efficiently
     ).filter(
         movement_type__in=VOIDABLE_MOVEMENT_TYPES
     ).exclude(
         voided_by__isnull=False  # Exclude already voided
+    ).exclude(
+        corrected_by__isnull=False  # Exclude already corrected
     )
 
+    # History shows VOID movements; we determine correction vs pure-void
+    # by whether a replacement (corrects=original) exists
     void_history_base = StockMovement.objects.select_related(
         'product', 'product__unit', 'recorded_by', 'voids', 'voids__product'
+    ).prefetch_related(
+        'voids__corrected_by'  # To check if original has a replacement
     ).filter(
         movement_type='VOID'
     )
