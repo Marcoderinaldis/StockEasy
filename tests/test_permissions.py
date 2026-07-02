@@ -77,6 +77,7 @@ urlpatterns = [
     path('', include('core.urls')),
     path('accounts/', include('accounts.urls')),
     path('inventory/', include('inventory.urls')),
+    path('waste/', include('waste.urls')),
 ]
 
 

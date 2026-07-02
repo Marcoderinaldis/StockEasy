@@ -231,30 +231,6 @@ def record_stock_out(product, quantity, reason_category, reason_notes, user, ref
     )
 
 
-def record_waste(product, quantity, reason_category, reason_notes, user, reference_id=None):
-    """
-    Record waste and update product stock.
-
-    Creates an append-only WASTE StockMovement record and updates Product.stock_quantity
-    atomically within a transaction.
-
-    Args:
-        product: Product instance for wasted stock
-        quantity: Decimal quantity in product's unit
-        reason_category: One of StockMovement.REASON_CATEGORY_CHOICES
-        reason_notes: Optional notes (do not include personal names)
-        user: CustomUser who recorded this movement
-        reference_id: Optional reference
-
-    Returns:
-        StockMovement: The created movement record
-
-    Raises:
-        ValueError: If quantity is not positive
-    """
-    raise NotImplementedError("To be implemented in Unit 5")
-
-
 def void_movement(movement, reason_notes, user):
     """
     Void an existing stock movement by creating a VOID movement.

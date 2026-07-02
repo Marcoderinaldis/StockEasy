@@ -1,0 +1,72 @@
+{% extends 'base.html' %}
+
+{% block title %}Record Waste - StockEasy{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-8 col-lg-6">
+    <h1 class="mb-4">Record Waste</h1>
+
+    {% if form.non_field_errors %}
+    <div class="alert alert-danger">
+      {% for error in form.non_field_errors %}
+        <p class="mb-0">{{ error }}</p>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <form method="post" novalidate>
+      {% csrf_token %}
+
+      <div class="mb-3">
+        <label for="id_product" class="form-label">Product</label>
+        {{ form.product }}
+        {% if form.product.errors %}
+          <div class="invalid-feedback d-block">{{ form.product.errors.0 }}</div>
+        {% endif %}
+      </div>
+
+      <div class="row">
+        <div class="col-md-6 mb-3">
+          <label for="id_quantity" class="form-label">Quantity</label>
+          {{ form.quantity }}
+          {% if form.quantity.errors %}
+            <div class="invalid-feedback d-block">{{ form.quantity.errors.0 }}</div>
+          {% endif %}
+        </div>
+        <div class="col-md-6 mb-3">
+          <label for="id_unit" class="form-label">Unit</label>
+          {{ form.unit }}
+          {% if form.unit.errors %}
+            <div class="invalid-feedback d-block">{{ form.unit.errors.0 }}</div>
+          {% endif %}
+          <small class="text-muted">Must match product's unit type</small>
+        </div>
+      </div>
+
+      <div class="mb-3">
+        <label for="id_waste_category" class="form-label">
+          Waste Category <span class="text-danger">*</span>
+        </label>
+        {{ form.waste_category }}
+        {% if form.waste_category.errors %}
+          <div class="invalid-feedback d-block">{{ form.waste_category.errors.0 }}</div>
+        {% endif %}
+      </div>
+
+      <div class="mb-3">
+        <label for="id_notes" class="form-label">Notes <span class="text-muted">(optional)</span></label>
+        {{ form.notes }}
+        {% if form.notes.errors %}
+          <div class="invalid-feedback d-block">{{ form.notes.errors.0 }}</div>
+        {% endif %}
+      </div>
+
+      <div class="d-grid gap-2">
+        <button type="submit" class="btn btn-warning btn-lg">Record Waste</button>
+        <a href="{% url 'core:home' %}" class="btn btn-outline-secondary">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

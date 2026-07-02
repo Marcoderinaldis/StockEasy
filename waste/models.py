@@ -1,22 +1,19 @@
 from django.db import models
 from django.conf import settings
 
+from inventory.models import StockMovement
+
 
 class WasteRecord(models.Model):
     """
     Waste tracking record (Feature 2 + 6, P1).
 
     Each waste record creates a corresponding WASTE StockMovement via the service layer.
+    The stock_movement field links to the append-only ledger entry.
     """
 
-    WASTE_CATEGORY_CHOICES = [
-        ('Product expired', 'Product Expired'),
-        ('Delivery damaged', 'Delivery Damaged'),
-        ('Counting error', 'Counting Error'),
-        ('Spillage/accidental waste', 'Spillage/Accidental Waste'),
-        ('Void—entered in error', 'Void—Entered in Error'),
-        ('Other', 'Other'),
-    ]
+    # Use the canonical REASON_CATEGORY_CHOICES from StockMovement
+    WASTE_CATEGORY_CHOICES = StockMovement.REASON_CATEGORY_CHOICES
 
     product = models.ForeignKey(
         'inventory.Product',
@@ -33,6 +30,13 @@ class WasteRecord(models.Model):
         related_name='waste_records_recorded',
     )
     recorded_at = models.DateTimeField(auto_now_add=True)
+    stock_movement = models.OneToOneField(
+        'inventory.StockMovement',
+        on_delete=models.PROTECT,
+        related_name='waste_record',
+        null=True,
+        blank=True,
+    )
 
     class Meta:
         ordering = ['-recorded_at']
