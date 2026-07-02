@@ -21,7 +21,7 @@
         {% endif %}
         {% if user.is_manager %}
         <li class="nav-item">
-          <a class="nav-link" href="#">Void / correction</a>
+          <a class="nav-link" href="{% url 'inventory:void_dashboard' %}">Void / correction</a>
         </li>
         {% endif %}
         {% if user.is_admin %}

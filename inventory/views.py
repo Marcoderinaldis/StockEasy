@@ -9,7 +9,7 @@ from django.utils import timezone
 
 from accounts.permissions import staff_required, manager_required
 from .models import Product, Category, Unit, StockMovement
-from .forms import StockMovementForm, MovementFilterForm, VoidMovementForm
+from .forms import StockMovementForm, MovementFilterForm, VoidMovementForm, VoidDashboardFilterForm
 from .services import (
     record_movement,
     void_movement,
@@ -185,4 +185,68 @@ def void_movement_view(request, pk):
         'movement': movement,
         'can_void': can_void,
         'movement_is_voided': movement_is_voided,
+    })
+
+
+@manager_required
+def void_dashboard(request):
+    """
+    Void/correction dashboard for managers.
+
+    Two sections:
+    1. Voidable worklist — movements that CAN still be voided (IN, OUT, WASTE not yet voided)
+    2. Void history — VOID movements that have been recorded
+
+    Manager-only (staff get 403).
+    NO user/recorded_by filter — per-person filtering is prohibited.
+    """
+    form = VoidDashboardFilterForm(request.GET or None)
+
+    # Base querysets with prefetch to avoid N+1
+    voidable_base = StockMovement.objects.select_related(
+        'product', 'product__unit', 'recorded_by'
+    ).filter(
+        movement_type__in=VOIDABLE_MOVEMENT_TYPES
+    ).exclude(
+        voided_by__isnull=False  # Exclude already voided
+    )
+
+    void_history_base = StockMovement.objects.select_related(
+        'product', 'product__unit', 'recorded_by', 'voids', 'voids__product'
+    ).filter(
+        movement_type='VOID'
+    )
+
+    # Apply filters
+    if form.is_valid():
+        product = form.cleaned_data.get('product')
+        date_from = form.cleaned_data.get('date_from')
+        date_to = form.cleaned_data.get('date_to')
+
+        if product:
+            voidable_base = voidable_base.filter(product=product)
+            void_history_base = void_history_base.filter(product=product)
+
+        if date_from:
+            voidable_base = voidable_base.filter(recorded_at__date__gte=date_from)
+            void_history_base = void_history_base.filter(recorded_at__date__gte=date_from)
+
+        if date_to:
+            voidable_base = voidable_base.filter(recorded_at__date__lte=date_to)
+            void_history_base = void_history_base.filter(recorded_at__date__lte=date_to)
+
+    # Paginate voidable worklist (newest first)
+    voidable_paginator = Paginator(voidable_base.order_by('-recorded_at'), 25)
+    voidable_page_number = request.GET.get('voidable_page')
+    voidable_page = voidable_paginator.get_page(voidable_page_number)
+
+    # Paginate void history (newest first)
+    history_paginator = Paginator(void_history_base.order_by('-recorded_at'), 25)
+    history_page_number = request.GET.get('history_page')
+    history_page = history_paginator.get_page(history_page_number)
+
+    return render(request, 'inventory/void_dashboard.html', {
+        'form': form,
+        'voidable_page': voidable_page,
+        'history_page': history_page,
     })
