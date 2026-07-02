@@ -1,10 +1,11 @@
 from django.contrib import messages
 from django.shortcuts import render, redirect
 
-from accounts.permissions import staff_required
-from .forms import WasteRecordForm
+from accounts.permissions import staff_required, manager_required
+from .forms import WasteRecordForm, ValuedWasteFilterForm
 from .services import (
     record_waste,
+    valued_waste_summary,
     StockValidationError,
     InsufficientStockError,
     UnitTypeMismatchError,
@@ -48,3 +49,41 @@ def record_waste_view(request):
         form = WasteRecordForm()
 
     return render(request, 'waste/record_waste.html', {'form': form})
+
+
+@manager_required
+def valued_waste_analytics(request):
+    """
+    Manager/admin-only valued wastage analytics.
+
+    Displays aggregate-only, k-anonymised waste data grouped by product and
+    reason category. No per-person breakdown — staff cannot reach this view
+    (403). Rows with no price snapshot are surfaced separately as unvalued
+    waste so loss is never understated.
+    """
+    form = ValuedWasteFilterForm(request.GET or None)
+
+    # Extract filters if form is valid (or empty = no filters)
+    date_from = None
+    date_to = None
+    category = None
+    product = None
+
+    if form.is_valid():
+        date_from = form.cleaned_data.get('date_from')
+        date_to = form.cleaned_data.get('date_to')
+        category = form.cleaned_data.get('category') or None
+        product = form.cleaned_data.get('product')
+
+    # Get aggregated summary
+    summary = valued_waste_summary(
+        date_from=date_from,
+        date_to=date_to,
+        category=category,
+        product=product,
+    )
+
+    return render(request, 'waste/valued_waste_analytics.html', {
+        'form': form,
+        'summary': summary,
+    })

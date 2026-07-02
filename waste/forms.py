@@ -1,7 +1,8 @@
 """
-Waste recording forms for StockEasy.
+Waste recording and analytics forms for StockEasy.
 
 Staff can record waste, which always decreases stock.
+Managers can access valued wastage analytics (aggregate only, k-anonymised).
 """
 
 from decimal import Decimal
@@ -100,5 +101,60 @@ class WasteRecordForm(forms.Form):
                     f'Unit type mismatch: {unit.name} ({unit.unit_type}) '
                     f'cannot be used with {product.name} ({product.unit.unit_type}).'
                 )
+
+        return cleaned_data
+
+
+class ValuedWasteFilterForm(forms.Form):
+    """
+    Filter for valued wastage analytics. Non-personal filters only:
+    reason category, product, date range.
+
+    NO user/recorded_by filter — per-person waste analytics is prohibited.
+    This form has no such field by construction.
+    """
+
+    # Build choices from canonical source with 'All' option
+    CATEGORY_FILTER_CHOICES = [
+        ('', 'All reasons'),
+    ] + list(StockMovement.REASON_CATEGORY_CHOICES)
+
+    category = forms.ChoiceField(
+        choices=CATEGORY_FILTER_CHOICES,
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-select'}),
+    )
+
+    product = forms.ModelChoiceField(
+        queryset=Product.objects.filter(is_active=True).order_by('name'),
+        required=False,
+        empty_label='All products',
+        widget=forms.Select(attrs={'class': 'form-select'}),
+    )
+
+    date_from = forms.DateField(
+        required=False,
+        widget=forms.DateInput(attrs={
+            'class': 'form-control',
+            'type': 'date',
+        }),
+    )
+
+    date_to = forms.DateField(
+        required=False,
+        widget=forms.DateInput(attrs={
+            'class': 'form-control',
+            'type': 'date',
+        }),
+    )
+
+    def clean(self):
+        """Validate date range is sensible."""
+        cleaned_data = super().clean()
+        date_from = cleaned_data.get('date_from')
+        date_to = cleaned_data.get('date_to')
+
+        if date_from and date_to and date_from > date_to:
+            raise forms.ValidationError('Date from cannot be after date to.')
 
         return cleaned_data
