@@ -620,3 +620,371 @@ class NavbarCostingLinkTests(TestCase):
 
         self.assertContains(response, 'Costing')
         self.assertContains(response, reverse('costing:costing_home'))
+
+
+# ---------------------------------------------------------------------------
+# F14: Recipe Margin and Selling Price Tests
+# ---------------------------------------------------------------------------
+
+from recipes.models import Recipe, RecipeIngredient
+from costing.services import (
+    calculate_recipe_margin,
+    suggest_selling_price,
+    calculate_recipe_cost,
+)
+
+
+class CalculateRecipeMarginTests(TransactionTestCase):
+    """Tests for calculate_recipe_margin service function."""
+
+    def setUp(self):
+        self.kg_unit = Unit.objects.create(
+            name='Kilograms',
+            unit_type='WEIGHT',
+            conversion_to_base=Decimal('1000.0000'),
+            base_unit_name='grams',
+        )
+        self.category = Category.objects.create(name='Produce', is_active=True)
+        self.product = Product.objects.create(
+            name='Tomatoes',
+            category=self.category,
+            unit=self.kg_unit,
+            stock_quantity=Decimal('100.0000'),
+        )
+        self.user = CustomUser.objects.create_user(
+            username='staffuser',
+            password='testpass123',
+            role=CustomUser.Role.STAFF,
+        )
+        # Set a price for the product: £2.00 per kg
+        PurchasePrice.objects.create(
+            product=self.product,
+            unit_price=Decimal('2.00'),
+            currency='GBP',
+            created_by=self.user,
+            effective_to=None,
+        )
+        # Create a recipe: 5kg tomatoes yields 10 portions
+        # Total cost = 5kg × £2/kg = £10
+        # Cost per portion = £10 / 10 = £1.00
+        self.recipe = Recipe.objects.create(
+            name='Tomato Soup',
+            yields_quantity=Decimal('10.0000'),
+            yields_unit=self.kg_unit,
+            created_by=self.user,
+        )
+        RecipeIngredient.objects.create(
+            recipe=self.recipe,
+            product=self.product,
+            quantity=Decimal('5.0000'),
+            unit=self.kg_unit,
+        )
+
+    def test_food_cost_percent_correct_for_known_recipe(self):
+        """Food-cost % is correctly calculated for a known recipe."""
+        # Cost per portion = £1.00, selling price = £4.00
+        # Food-cost % = (1.00 / 4.00) × 100 = 25.0%
+        # GP % = 100 - 25 = 75.0%
+        self.recipe.selling_price = Decimal('4.00')
+        self.recipe.save()
+
+        margin = calculate_recipe_margin(self.recipe)
+
+        self.assertEqual(margin.status, 'ok')
+        self.assertEqual(margin.food_cost_pct, Decimal('25.0'))
+        self.assertEqual(margin.gp_pct, Decimal('75.0'))
+        self.assertEqual(margin.cost_per_yield_unit, Decimal('1.00'))
+
+    def test_selling_price_none_returns_no_selling_price_status(self):
+        """selling_price=None returns status='no_selling_price', no % computed."""
+        self.recipe.selling_price = None
+        self.recipe.save()
+
+        margin = calculate_recipe_margin(self.recipe)
+
+        self.assertEqual(margin.status, 'no_selling_price')
+        self.assertIsNone(margin.food_cost_pct)
+        self.assertIsNone(margin.gp_pct)
+
+    def test_incomplete_cost_returns_cost_incomplete_status(self):
+        """Incomplete cost (missing price) returns status='cost_incomplete'."""
+        # Add a second ingredient without a price
+        unpriced_product = Product.objects.create(
+            name='Basil',
+            category=self.category,
+            unit=self.kg_unit,
+            stock_quantity=Decimal('10.0000'),
+        )
+        RecipeIngredient.objects.create(
+            recipe=self.recipe,
+            product=unpriced_product,
+            quantity=Decimal('0.1000'),
+            unit=self.kg_unit,
+        )
+
+        self.recipe.selling_price = Decimal('5.00')
+        self.recipe.save()
+
+        margin = calculate_recipe_margin(self.recipe)
+
+        self.assertEqual(margin.status, 'cost_incomplete')
+        self.assertIsNone(margin.food_cost_pct)
+        self.assertIsNone(margin.gp_pct)
+        self.assertIn('Basil', margin.missing_price_products)
+
+    def test_selling_price_zero_returns_invalid_selling_price_status(self):
+        """selling_price=0 returns status='invalid_selling_price' (no divide-by-zero)."""
+        self.recipe.selling_price = Decimal('0')
+        self.recipe.save()
+
+        margin = calculate_recipe_margin(self.recipe)
+
+        self.assertEqual(margin.status, 'invalid_selling_price')
+        self.assertIsNone(margin.food_cost_pct)
+        self.assertIsNone(margin.gp_pct)
+
+    def test_selling_price_negative_returns_invalid_selling_price_status(self):
+        """selling_price<0 returns status='invalid_selling_price'."""
+        self.recipe.selling_price = Decimal('-1.00')
+        self.recipe.save()
+
+        margin = calculate_recipe_margin(self.recipe)
+
+        self.assertEqual(margin.status, 'invalid_selling_price')
+        self.assertIsNone(margin.food_cost_pct)
+        self.assertIsNone(margin.gp_pct)
+
+    def test_invalid_yield_returns_invalid_yield_status(self):
+        """yields_quantity=0 returns status='invalid_yield'."""
+        self.recipe.yields_quantity = Decimal('0')
+        self.recipe.selling_price = Decimal('5.00')
+        self.recipe.save()
+
+        margin = calculate_recipe_margin(self.recipe)
+
+        self.assertEqual(margin.status, 'invalid_yield')
+        self.assertIsNone(margin.food_cost_pct)
+        self.assertIsNone(margin.gp_pct)
+
+
+class SuggestSellingPriceTests(TransactionTestCase):
+    """Tests for suggest_selling_price service function."""
+
+    def setUp(self):
+        self.kg_unit = Unit.objects.create(
+            name='Kilograms',
+            unit_type='WEIGHT',
+            conversion_to_base=Decimal('1000.0000'),
+            base_unit_name='grams',
+        )
+        self.category = Category.objects.create(name='Produce', is_active=True)
+        self.product = Product.objects.create(
+            name='Tomatoes',
+            category=self.category,
+            unit=self.kg_unit,
+            stock_quantity=Decimal('100.0000'),
+        )
+        self.user = CustomUser.objects.create_user(
+            username='staffuser',
+            password='testpass123',
+            role=CustomUser.Role.STAFF,
+        )
+        # Set a price: £3.00 per kg
+        PurchasePrice.objects.create(
+            product=self.product,
+            unit_price=Decimal('3.00'),
+            currency='GBP',
+            created_by=self.user,
+            effective_to=None,
+        )
+        # Recipe: 10kg yields 10 portions
+        # Cost = 10kg × £3/kg = £30, cost per portion = £3.00
+        self.recipe = Recipe.objects.create(
+            name='Tomato Soup',
+            yields_quantity=Decimal('10.0000'),
+            yields_unit=self.kg_unit,
+            created_by=self.user,
+        )
+        RecipeIngredient.objects.create(
+            recipe=self.recipe,
+            product=self.product,
+            quantity=Decimal('10.0000'),
+            unit=self.kg_unit,
+        )
+
+    def test_suggest_selling_price_at_70_percent_gp(self):
+        """Target 70% GP on known cost returns expected price."""
+        # Cost per portion = £3.00
+        # For 70% GP: price = cost / (1 - 0.70) = 3.00 / 0.30 = £10.00
+        result = suggest_selling_price(self.recipe, Decimal('70'))
+
+        self.assertEqual(result.status, 'ok')
+        self.assertEqual(result.suggested_price, Decimal('10.00'))
+        self.assertEqual(result.cost_per_yield_unit, Decimal('3.00'))
+
+    def test_suggest_selling_price_back_computes_to_target_gp(self):
+        """Suggested price back-computes to approximately the target GP."""
+        result = suggest_selling_price(self.recipe, Decimal('70'))
+
+        # Verify: GP% = (price - cost) / price × 100
+        # GP% = (10 - 3) / 10 × 100 = 70%
+        suggested = result.suggested_price
+        cost = result.cost_per_yield_unit
+        gp_pct = ((suggested - cost) / suggested) * 100
+
+        self.assertAlmostEqual(float(gp_pct), 70.0, places=1)
+
+    def test_target_margin_100_or_more_raises(self):
+        """Target margin >= 100 raises PriceValidationError."""
+        with self.assertRaises(PriceValidationError) as ctx:
+            suggest_selling_price(self.recipe, Decimal('100'))
+        self.assertIn('less than 100', str(ctx.exception))
+
+        with self.assertRaises(PriceValidationError):
+            suggest_selling_price(self.recipe, Decimal('150'))
+
+    def test_target_margin_negative_raises(self):
+        """Target margin < 0 raises PriceValidationError."""
+        with self.assertRaises(PriceValidationError) as ctx:
+            suggest_selling_price(self.recipe, Decimal('-5'))
+        self.assertIn('negative', str(ctx.exception))
+
+    def test_incomplete_cost_cannot_suggest(self):
+        """Incomplete cost returns status='cost_incomplete'."""
+        # Add an unpriced ingredient
+        unpriced = Product.objects.create(
+            name='Basil',
+            category=self.category,
+            unit=self.kg_unit,
+            stock_quantity=Decimal('10.0000'),
+        )
+        RecipeIngredient.objects.create(
+            recipe=self.recipe,
+            product=unpriced,
+            quantity=Decimal('0.1000'),
+            unit=self.kg_unit,
+        )
+
+        result = suggest_selling_price(self.recipe, Decimal('70'))
+
+        self.assertEqual(result.status, 'cost_incomplete')
+        self.assertIsNone(result.suggested_price)
+        self.assertIn('Basil', result.missing_price_products)
+
+
+class RecipeCostingViewTests(TestCase):
+    """Tests for the recipe_costing view RBAC."""
+
+    def setUp(self):
+        self.kg_unit = Unit.objects.create(
+            name='Kilograms',
+            unit_type='WEIGHT',
+            conversion_to_base=Decimal('1000.0000'),
+            base_unit_name='grams',
+        )
+        self.category = Category.objects.create(name='Produce', is_active=True)
+        self.product = Product.objects.create(
+            name='Tomatoes',
+            category=self.category,
+            unit=self.kg_unit,
+            stock_quantity=Decimal('100.0000'),
+        )
+        self.staff_user = CustomUser.objects.create_user(
+            username='staffuser',
+            password='testpass123',
+            role=CustomUser.Role.STAFF,
+        )
+        self.manager_user = CustomUser.objects.create_user(
+            username='manageruser',
+            password='testpass123',
+            role=CustomUser.Role.MANAGER,
+        )
+        # Price for product
+        PurchasePrice.objects.create(
+            product=self.product,
+            unit_price=Decimal('2.00'),
+            currency='GBP',
+            created_by=self.staff_user,
+            effective_to=None,
+        )
+        self.recipe = Recipe.objects.create(
+            name='Tomato Soup',
+            yields_quantity=Decimal('10.0000'),
+            yields_unit=self.kg_unit,
+            created_by=self.staff_user,
+        )
+        RecipeIngredient.objects.create(
+            recipe=self.recipe,
+            product=self.product,
+            quantity=Decimal('5.0000'),
+            unit=self.kg_unit,
+        )
+        self.url = reverse('costing:recipe_costing')
+        self.set_price_url = reverse('costing:set_selling_price', args=[self.recipe.pk])
+
+    def test_staff_get_recipe_costing_200(self):
+        """Staff user can GET recipe costing page (200)."""
+        self.client.login(username='staffuser', password='testpass123')
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Recipe Costing')
+        self.assertContains(response, 'Tomato Soup')
+
+    def test_manager_get_recipe_costing_200(self):
+        """Manager user can GET recipe costing page (200)."""
+        self.client.login(username='manageruser', password='testpass123')
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 200)
+
+    def test_staff_post_set_selling_price_403(self):
+        """Staff user POST to set selling price gets 403."""
+        self.client.login(username='staffuser', password='testpass123')
+        response = self.client.post(self.set_price_url, {
+            'selling_price': '5.00',
+        })
+        self.assertEqual(response.status_code, 403)
+
+        # Price not set
+        self.recipe.refresh_from_db()
+        self.assertIsNone(self.recipe.selling_price)
+
+    def test_manager_post_set_selling_price_succeeds(self):
+        """Manager user POST to set selling price succeeds."""
+        self.client.login(username='manageruser', password='testpass123')
+        response = self.client.post(self.set_price_url, {
+            'selling_price': '5.00',
+        })
+
+        # Redirects on success
+        self.assertEqual(response.status_code, 302)
+
+        # Price is set
+        self.recipe.refresh_from_db()
+        self.assertEqual(self.recipe.selling_price, Decimal('5.00'))
+
+    def test_anonymous_recipe_costing_redirects_to_login(self):
+        """Anonymous user is redirected to login."""
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 302)
+        self.assertIn('/accounts/login/', response.url)
+
+    def test_page_shows_food_cost_and_gp_when_complete(self):
+        """Page shows food-cost % and GP % when cost and selling price are set."""
+        self.recipe.selling_price = Decimal('4.00')
+        self.recipe.save()
+
+        self.client.login(username='staffuser', password='testpass123')
+        response = self.client.get(self.url)
+
+        # Cost per portion = £1.00, selling = £4.00
+        # Food-cost = 25%, GP = 75%
+        self.assertContains(response, '25.0%')
+        self.assertContains(response, '75.0%')
+
+    def test_page_shows_no_price_set_when_selling_price_missing(self):
+        """Page shows 'No price set' when selling_price is None."""
+        self.client.login(username='staffuser', password='testpass123')
+        response = self.client.get(self.url)
+
+        self.assertContains(response, 'No price set')
+        self.assertContains(response, 'Not set')

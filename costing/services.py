@@ -283,21 +283,178 @@ def get_price_history(product, start_date=None, end_date=None):
     raise NotImplementedError("To be implemented in Sprint 3")
 
 
-def suggest_selling_price(recipe, target_margin_percent):
-    """
-    Suggest a selling price based on target gross margin.
+# Precision for percentage display (1 decimal place)
+PERCENT_PRECISION = Decimal('0.1')
 
-    Formula: selling_price = cost_per_yield / (1 - margin)
+
+def _quantize_percent(value):
+    """Quantize a percentage to 1 decimal place."""
+    return Decimal(str(value)).quantize(PERCENT_PRECISION, rounding=ROUND_HALF_UP)
+
+
+@dataclass
+class RecipeMargin:
+    """
+    Margin calculation result for a recipe.
+
+    food_cost_pct and gp_pct are only populated when status='ok'.
+    When status indicates an issue, the reason is explicit so the UI can
+    display an honest message rather than a misleading number.
+    """
+    recipe_id: int
+    recipe_name: str
+    status: str  # 'ok' | 'cost_incomplete' | 'no_selling_price' | 'invalid_selling_price' | 'invalid_yield'
+    cost_per_yield_unit: Decimal | None
+    selling_price: Decimal | None
+    food_cost_pct: Decimal | None  # 1 decimal place
+    gp_pct: Decimal | None         # 1 decimal place (100 - food_cost_pct)
+    missing_price_products: list   # list[str] - passed through from RecipeCost
+    unit_mismatch_products: list   # list[str] - passed through from RecipeCost
+
+
+def calculate_recipe_margin(recipe):
+    """
+    Compute food-cost percentage and gross-profit percentage for a recipe.
+
+    Food-cost % compares like-for-like: cost_per_yield_unit (cost to produce one
+    portion) divided by selling_price (revenue per portion), times 100.
+    GP % = 100 - food-cost %.
+
+    Returns an explicit status rather than a misleading number when inputs are
+    missing or invalid. Never computes a percentage on partial or invalid data.
 
     Args:
-        recipe: Recipe instance
-        target_margin_percent: Target margin as percentage (e.g., 70 for 70%)
+        recipe: Recipe instance with optional selling_price set
 
     Returns:
-        Decimal: Suggested selling price per yield unit
+        RecipeMargin: Margin data with status indicating completeness
+    """
+    cost = calculate_recipe_cost(recipe)
+
+    # Base result with defaults
+    result_kwargs = {
+        'recipe_id': recipe.id,
+        'recipe_name': recipe.name,
+        'cost_per_yield_unit': cost.cost_per_yield_unit,
+        'selling_price': recipe.selling_price,
+        'food_cost_pct': None,
+        'gp_pct': None,
+        'missing_price_products': cost.missing_price_products,
+        'unit_mismatch_products': cost.unit_mismatch_products,
+    }
+
+    # Check conditions in order of precedence
+    if not cost.is_complete:
+        return RecipeMargin(status='cost_incomplete', **result_kwargs)
+
+    if cost.cost_per_yield_unit is None:
+        # yields_quantity <= 0
+        return RecipeMargin(status='invalid_yield', **result_kwargs)
+
+    if recipe.selling_price is None:
+        return RecipeMargin(status='no_selling_price', **result_kwargs)
+
+    if recipe.selling_price <= 0:
+        return RecipeMargin(status='invalid_selling_price', **result_kwargs)
+
+    # All conditions met - compute percentages
+    # Use cost_per_yield_unit for precision (already computed from raw_total_cost)
+    food_cost_pct = _quantize_percent(
+        (cost.cost_per_yield_unit / recipe.selling_price) * 100
+    )
+    gp_pct = _quantize_percent(Decimal('100') - food_cost_pct)
+
+    # Update result_kwargs with computed values
+    result_kwargs['food_cost_pct'] = food_cost_pct
+    result_kwargs['gp_pct'] = gp_pct
+
+    return RecipeMargin(status='ok', **result_kwargs)
+
+
+@dataclass
+class SuggestedPrice:
+    """
+    Result of suggest_selling_price calculation.
+
+    suggested_price is only populated when status='ok'.
+    """
+    status: str  # 'ok' | 'cost_incomplete' | 'invalid_yield' | 'invalid_target'
+    suggested_price: Decimal | None
+    cost_per_yield_unit: Decimal | None
+    target_margin_percent: Decimal | None
+    missing_price_products: list
+    unit_mismatch_products: list
+
+
+def suggest_selling_price(recipe, target_margin_percent):
+    """
+    Suggest a per-yield-unit selling price that achieves a target gross-profit
+    margin, based on the recipe's cost per yield unit.
+
+    Formula: suggested_price = cost_per_yield_unit / (1 - target_margin/100)
+
+    This is read-only; does not save the price to the recipe.
+
+    Args:
+        recipe: Recipe instance to calculate suggested price for
+        target_margin_percent: Target GP margin as percentage (e.g., 70 for 70% GP).
+                               Must be >= 0 and < 100.
+
+    Returns:
+        SuggestedPrice: Result with status and suggested_price if calculable
 
     Raises:
-        ValueError: If margin is not between 0 and 100 (exclusive)
+        PriceValidationError: If target_margin_percent is invalid (not a number,
+                              negative, or >= 100)
     """
-    # TODO: Implement in Sprint 3
-    raise NotImplementedError("To be implemented in Sprint 3")
+    # Validate target margin
+    try:
+        target = Decimal(str(target_margin_percent))
+    except (InvalidOperation, ValueError, TypeError):
+        raise PriceValidationError(
+            f'Target margin must be a valid number, got: {target_margin_percent}'
+        )
+
+    if target < 0:
+        raise PriceValidationError('Target margin cannot be negative.')
+
+    if target >= 100:
+        raise PriceValidationError(
+            'Target margin must be less than 100 (a 100% GP is impossible).'
+        )
+
+    # Calculate recipe cost
+    cost = calculate_recipe_cost(recipe)
+
+    base_kwargs = {
+        'target_margin_percent': target,
+        'missing_price_products': cost.missing_price_products,
+        'unit_mismatch_products': cost.unit_mismatch_products,
+    }
+
+    if not cost.is_complete:
+        return SuggestedPrice(
+            status='cost_incomplete',
+            suggested_price=None,
+            cost_per_yield_unit=cost.cost_per_yield_unit,
+            **base_kwargs,
+        )
+
+    if cost.cost_per_yield_unit is None:
+        return SuggestedPrice(
+            status='invalid_yield',
+            suggested_price=None,
+            cost_per_yield_unit=None,
+            **base_kwargs,
+        )
+
+    # Calculate: price = cost / (1 - margin/100)
+    divisor = Decimal('1') - (target / Decimal('100'))
+    suggested = _quantize_money(cost.cost_per_yield_unit / divisor)
+
+    return SuggestedPrice(
+        status='ok',
+        suggested_price=suggested,
+        cost_per_yield_unit=cost.cost_per_yield_unit,
+        **base_kwargs,
+    )

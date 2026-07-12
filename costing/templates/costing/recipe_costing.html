@@ -11,32 +11,127 @@
 </nav>
 
 <h1 class="mb-4">Recipe Costing</h1>
-<p class="text-muted mb-3">Cost breakdown by recipe. Full calculations coming in Sprint 4.</p>
+<p class="text-muted mb-3">Cost breakdown, selling prices, and margin analysis by recipe.</p>
 
+<div class="table-responsive">
 <table class="table table-striped align-middle">
   <thead>
     <tr>
       <th>Recipe</th>
-      <th>Portions</th>
+      <th>Yield</th>
       <th>Total Cost</th>
-      <th>Cost per Portion</th>
-      <th>Suggested Price</th>
+      <th>Cost/Portion</th>
+      <th>Selling Price</th>
+      <th>Food-cost %</th>
+      <th>GP %</th>
+      {% if request.user.is_manager %}
+      <th>Suggested (70% GP)</th>
+      {% endif %}
     </tr>
   </thead>
   <tbody>
     {% for row in costing_data %}
     <tr>
       <td>{{ row.recipe.name }}</td>
-      <td>{{ row.recipe.portions }}</td>
-      <td>{% if row.total_cost %}£{{ row.total_cost|floatformat:2 }}{% else %}&mdash;{% endif %}</td>
-      <td>{% if row.cost_per_portion %}£{{ row.cost_per_portion|floatformat:2 }}{% else %}&mdash;{% endif %}</td>
-      <td>{% if row.suggested_price %}£{{ row.suggested_price|floatformat:2 }}{% else %}&mdash;{% endif %}</td>
+      <td>{{ row.recipe.yields_quantity|floatformat:2 }} {{ row.recipe.yields_unit.name }}</td>
+
+      {# Total Cost #}
+      <td>
+        {% if row.cost.is_complete %}
+          £{{ row.cost.total_cost|floatformat:2 }}
+        {% elif row.cost.missing_price_products %}
+          <span class="text-warning" title="Missing prices: {{ row.cost.missing_price_products|join:', ' }}">
+            Cost incomplete
+          </span>
+        {% elif row.cost.unit_mismatch_products %}
+          <span class="text-danger" title="Unit mismatch: {{ row.cost.unit_mismatch_products|join:', ' }}">
+            Unit error
+          </span>
+        {% else %}
+          &mdash;
+        {% endif %}
+      </td>
+
+      {# Cost per Portion #}
+      <td>
+        {% if row.cost.cost_per_yield_unit %}
+          £{{ row.cost.cost_per_yield_unit|floatformat:2 }}
+        {% elif row.margin.status == 'invalid_yield' %}
+          <span class="text-danger">Invalid yield</span>
+        {% else %}
+          &mdash;
+        {% endif %}
+      </td>
+
+      {# Selling Price - managers can edit inline #}
+      <td>
+        {% if request.user.is_manager and row.form %}
+          <form method="post" action="{% url 'costing:set_selling_price' row.recipe.id %}" class="d-flex align-items-center gap-1">
+            {% csrf_token %}
+            <span class="input-group-text p-1" style="font-size: 0.875rem;">£</span>
+            {{ row.form.selling_price }}
+            <button type="submit" class="btn btn-sm btn-primary">Set</button>
+          </form>
+        {% elif row.recipe.selling_price %}
+          £{{ row.recipe.selling_price|floatformat:2 }}
+        {% else %}
+          <span class="text-muted">Not set</span>
+        {% endif %}
+      </td>
+
+      {# Food-cost % #}
+      <td>
+        {% if row.margin.status == 'ok' %}
+          {{ row.margin.food_cost_pct|floatformat:1 }}%
+        {% elif row.margin.status == 'no_selling_price' %}
+          <span class="text-muted">No price set</span>
+        {% elif row.margin.status == 'invalid_selling_price' %}
+          <span class="text-danger">Invalid price</span>
+        {% elif row.margin.status == 'cost_incomplete' %}
+          <span class="text-warning" title="Missing: {{ row.margin.missing_price_products|join:', ' }}{% if row.margin.unit_mismatch_products %} | Unit mismatch: {{ row.margin.unit_mismatch_products|join:', ' }}{% endif %}">
+            Cost incomplete
+          </span>
+        {% elif row.margin.status == 'invalid_yield' %}
+          <span class="text-danger">Invalid yield</span>
+        {% else %}
+          &mdash;
+        {% endif %}
+      </td>
+
+      {# GP % #}
+      <td>
+        {% if row.margin.status == 'ok' %}
+          <strong>{{ row.margin.gp_pct|floatformat:1 }}%</strong>
+        {% elif row.margin.status == 'no_selling_price' %}
+          <span class="text-muted">No price set</span>
+        {% elif row.margin.status == 'invalid_selling_price' %}
+          <span class="text-danger">Invalid price</span>
+        {% elif row.margin.status == 'cost_incomplete' %}
+          <span class="text-warning">Cost incomplete</span>
+        {% elif row.margin.status == 'invalid_yield' %}
+          <span class="text-danger">Invalid yield</span>
+        {% else %}
+          &mdash;
+        {% endif %}
+      </td>
+
+      {# Suggested Price (managers only) #}
+      {% if request.user.is_manager %}
+      <td>
+        {% if row.suggested_price %}
+          £{{ row.suggested_price|floatformat:2 }}
+        {% else %}
+          &mdash;
+        {% endif %}
+      </td>
+      {% endif %}
     </tr>
     {% empty %}
-    <tr><td colspan="5" class="text-muted">No recipes yet.</td></tr>
+    <tr><td colspan="{% if request.user.is_manager %}8{% else %}7{% endif %}" class="text-muted">No recipes yet.</td></tr>
     {% endfor %}
   </tbody>
 </table>
+</div>
 
 <a href="{% url 'costing:costing_home' %}" class="btn btn-outline-secondary">Back to Product Prices</a>
 {% endblock %}

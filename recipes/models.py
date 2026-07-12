@@ -13,6 +13,14 @@ class Recipe(models.Model):
         on_delete=models.PROTECT,
         related_name='recipes',
     )
+    selling_price = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text='Menu selling price per yield unit. Null if not yet set; '
+                  'food-cost percent is not computed without it.',
+    )
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,

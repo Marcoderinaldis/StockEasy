@@ -10,4 +10,5 @@ urlpatterns = [
     path('prices/update/', views.update_price, name='update_price'),
     path('prices/<int:product_id>/update/', views.update_price, name='update_price_for_product'),
     path('recipes/', views.recipe_costing, name='recipe_costing'),
+    path('recipes/<int:recipe_id>/set-price/', views.set_selling_price, name='set_selling_price'),
 ]
