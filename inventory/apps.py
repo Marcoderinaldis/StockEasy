@@ -4,3 +4,13 @@ from django.apps import AppConfig
 class InventoryConfig(AppConfig):
     default_auto_field = 'django.db.models.BigAutoField'
     name = 'inventory'
+
+    def ready(self):
+        from auditlog.registry import auditlog
+        from .models import Unit, Category, Product, PurchasePrice, StockMovement
+
+        auditlog.register(Unit)
+        auditlog.register(Category)
+        auditlog.register(Product)
+        auditlog.register(PurchasePrice)
+        auditlog.register(StockMovement)
