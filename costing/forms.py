@@ -40,3 +40,33 @@ class UpdatePriceForm(forms.Form):
         if price is not None and price <= 0:
             raise forms.ValidationError("Price must be positive.")
         return price
+
+
+class SetSellingPriceForm(forms.Form):
+    """
+    Form for setting a recipe's selling price.
+
+    Manager/admin use only. Unlike PurchasePrice (which is append-only historical
+    data), selling_price is the current menu price and is simply updated in place.
+    """
+
+    selling_price = forms.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        min_value=Decimal('0.01'),
+        widget=forms.NumberInput(attrs={
+            'class': 'form-control form-control-sm',
+            'step': '0.01',
+            'min': '0.01',
+            'placeholder': '0.00',
+            'style': 'width: 100px;',
+        }),
+        help_text="Menu price per portion",
+    )
+
+    def clean_selling_price(self):
+        """Ensure price is positive."""
+        price = self.cleaned_data.get('selling_price')
+        if price is not None and price <= 0:
+            raise forms.ValidationError("Selling price must be positive.")
+        return price
