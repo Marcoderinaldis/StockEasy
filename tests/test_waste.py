@@ -763,30 +763,18 @@ class ValuedWasteByTests(TransactionTestCase):
         with self.assertRaises(ValueError):
             valued_waste_by('user')
 
-    def test_only_waste_movements_included(self):
-        """Only movement_type='WASTE' rows are included (VOID excluded)."""
-        # Record a waste then void it
+    def test_void_movements_excluded_by_type(self):
+        """VOID movement_type rows are excluded by type filter."""
+        # This test verifies that movement_type='VOID' rows are not counted.
+        # Voided WASTE rows are tested separately below.
         from inventory.services import void_movement
         manager = CustomUser.objects.create_user(
             username='manager',
             password='testpass123',
             role=CustomUser.Role.MANAGER,
         )
-        waste = record_waste(
-            product=self.product1,
-            quantity=Decimal('1.0000'),
-            unit=self.kg_unit,
-            waste_category='Other',
-            user=self.user,
-        )
-        # Void the waste
-        void_movement(
-            movement=waste.stock_movement,
-            reason_notes='Test void',
-            user=manager,
-        )
-        # Record 2 more waste events
-        for _ in range(2):
+        # Record 3 waste events (meets k-anon threshold)
+        for _ in range(3):
             record_waste(
                 product=self.product1,
                 quantity=Decimal('1.0000'),
@@ -794,14 +782,139 @@ class ValuedWasteByTests(TransactionTestCase):
                 waste_category='Other',
                 user=self.user,
             )
+        # The void_movement creates a VOID row - verify VOID type is excluded
+        movements = StockMovement.objects.filter(movement_type='VOID')
+        # We haven't voided anything yet, so no VOID rows exist
+        self.assertEqual(movements.count(), 0)
 
-        # Query - should see 3 WASTE movements total (including voided one),
-        # but NOT the VOID movement itself
         rows = valued_waste_by('product')
         total_events = sum(r['event_count'] for r in rows)
-        # 3 WASTE events (including the voided one - it's still a WASTE row)
-        # The VOID movement is movement_type='VOID', not 'WASTE'
+        # 3 live WASTE events
         self.assertEqual(total_events, 3)
+
+    def test_voided_waste_excluded_from_valued_total(self):
+        """A WASTE that is voided is EXCLUDED from valued_total and event_count."""
+        from inventory.services import void_movement
+        manager = CustomUser.objects.create_user(
+            username='manager',
+            password='testpass123',
+            role=CustomUser.Role.MANAGER,
+        )
+        # Record 3 waste events: 3 × 2kg × £2.50 = £15.00
+        wastes = []
+        for _ in range(3):
+            w = record_waste(
+                product=self.product1,
+                quantity=Decimal('2.0000'),
+                unit=self.kg_unit,
+                waste_category='Product expired',
+                user=self.user,
+            )
+            wastes.append(w)
+
+        # Before void: £15.00, 3 events
+        summary_before = valued_waste_summary()
+        self.assertEqual(summary_before['valued_total'], Decimal('15.00'))
+        self.assertEqual(summary_before['valued_event_count'], 3)
+
+        # Void one waste (2kg × £2.50 = £5.00)
+        void_movement(
+            movement=wastes[0].stock_movement,
+            reason_notes='Entered in error',
+            user=manager,
+        )
+
+        # After void: £10.00, 2 events (voided waste excluded)
+        summary_after = valued_waste_summary()
+        self.assertEqual(summary_after['valued_total'], Decimal('10.00'))
+        self.assertEqual(summary_after['valued_event_count'], 2)
+
+    def test_corrected_waste_original_excluded_replacement_counted(self):
+        """Corrected WASTE: original excluded, replacement counted, net = corrected amount."""
+        from inventory.services import correct_movement
+        manager = CustomUser.objects.create_user(
+            username='manager',
+            password='testpass123',
+            role=CustomUser.Role.MANAGER,
+        )
+        # Record 3 waste events: 3 × 2kg × £2.50 = £15.00
+        wastes = []
+        for _ in range(3):
+            w = record_waste(
+                product=self.product1,
+                quantity=Decimal('2.0000'),
+                unit=self.kg_unit,
+                waste_category='Product expired',
+                user=self.user,
+            )
+            wastes.append(w)
+
+        # Before correction: £15.00, 3 events
+        summary_before = valued_waste_summary()
+        self.assertEqual(summary_before['valued_total'], Decimal('15.00'))
+        self.assertEqual(summary_before['valued_event_count'], 3)
+
+        # Correct one waste: change 2kg to 1kg (was £5.00, now £2.50)
+        correct_movement(
+            original=wastes[0].stock_movement,
+            corrected_quantity=Decimal('1.0000'),
+            corrected_unit=self.kg_unit,
+            corrected_reason_category='Product expired',
+            corrected_notes='Corrected quantity',
+            justification='Wrong quantity entered',
+            user=manager,
+        )
+
+        # After correction: original excluded, replacement counted
+        # Net = 2 original (£10.00) + 1 replacement (£2.50) = £12.50, 3 events
+        summary_after = valued_waste_summary()
+        self.assertEqual(summary_after['valued_total'], Decimal('12.50'))
+        self.assertEqual(summary_after['valued_event_count'], 3)
+
+    def test_voided_unvalued_waste_excluded_from_unvalued_figures(self):
+        """An unvalued (null-price) WASTE that is voided is excluded from unvalued_* figures."""
+        from inventory.services import void_movement
+        manager = CustomUser.objects.create_user(
+            username='manager',
+            password='testpass123',
+            role=CustomUser.Role.MANAGER,
+        )
+        # Create product with no price (unvalued)
+        product_no_price = Product.objects.create(
+            name='Unpriced',
+            category=self.category,
+            unit=self.kg_unit,
+            stock_quantity=Decimal('100.0000'),
+        )
+
+        # Record 3 unvalued waste events: 3 × 5kg = 15kg
+        wastes = []
+        for _ in range(3):
+            w = record_waste(
+                product=product_no_price,
+                quantity=Decimal('5.0000'),
+                unit=self.kg_unit,
+                waste_category='Other',
+                user=self.user,
+            )
+            wastes.append(w)
+
+        # Before void: 3 events, 15kg
+        summary_before = valued_waste_summary()
+        self.assertEqual(summary_before['unvalued_event_count'], 3)
+        self.assertEqual(summary_before['unvalued_total_qty'], Decimal('15.0000'))
+
+        # Void one unvalued waste (5kg)
+        void_movement(
+            movement=wastes[0].stock_movement,
+            reason_notes='Entered in error',
+            user=manager,
+        )
+
+        # After void: 2 events, 10kg (voided excluded)
+        summary_after = valued_waste_summary()
+        self.assertEqual(summary_after['unvalued_event_count'], 2)
+        self.assertEqual(summary_after['unvalued_total_qty'], Decimal('10.0000'))
 
 
 class ValuedWasteSummaryTests(TransactionTestCase):

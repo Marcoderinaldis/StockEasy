@@ -254,8 +254,12 @@ def valued_waste_by(dimension, date_from=None, date_to=None, category=None,
             "Per-person grouping is prohibited."
         )
 
-    # Base queryset: only WASTE movements (excludes VOID by construction)
-    base_qs = StockMovement.objects.filter(movement_type='WASTE')
+    # Base queryset: live WASTE movements only — excludes VOID rows by type, and
+    # excludes any WASTE that has since been voided or corrected (voided_by set).
+    base_qs = StockMovement.objects.filter(
+        movement_type='WASTE',
+        voided_by__isnull=True,
+    )
 
     # Apply optional filters (all non-personal)
     if date_from:
@@ -335,8 +339,11 @@ def valued_waste_summary(date_from=None, date_to=None, category=None, product=No
             - 'unvalued_total_qty': Decimal — quantity that could NOT be valued
             - 'k_anon_min': The k-anonymity threshold used
     """
-    # Build base queryset
-    base_qs = StockMovement.objects.filter(movement_type='WASTE')
+    # Build base queryset: live WASTE only (excludes voided/corrected)
+    base_qs = StockMovement.objects.filter(
+        movement_type='WASTE',
+        voided_by__isnull=True,
+    )
 
     if date_from:
         base_qs = base_qs.filter(recorded_at__date__gte=date_from)
