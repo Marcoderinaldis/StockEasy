@@ -1,5 +1,6 @@
 from django.db import models
 from django.conf import settings
+from django.core.validators import MinValueValidator
 
 
 class Unit(models.Model):
@@ -122,6 +123,7 @@ class StockMovement(models.Model):
     MOVEMENT_TYPE_CHOICES = [
         ('IN', 'Stock In'),
         ('OUT', 'Stock Out'),
+        ('SALE', 'Sale'),
         ('WASTE', 'Waste'),
         ('VOID', 'Void — Entered in Error'),
         ('ADJUSTMENT_IN', 'Adjustment In'),
@@ -192,3 +194,67 @@ class StockMovement(models.Model):
 
     def __str__(self):
         return f"{self.product.name} {self.movement_type} {self.quantity}"
+
+
+class Order(models.Model):
+    """
+    A customer order. Placing an order depletes recipe ingredients from stock via
+    SALE movements (the depletion logic lives in the order service, F15b). Minimal
+    by design — this demonstrates governed stock depletion, not a full POS.
+    """
+
+    reference = models.CharField(
+        max_length=50,
+        blank=True,
+        null=True,
+        help_text='Free-text label, e.g. a table or ticket number.',
+    )
+    notes = models.CharField(max_length=200, blank=True, null=True)
+    placed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='orders_placed',
+    )
+    placed_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-placed_at']
+
+    def __str__(self):
+        return f"Order #{self.pk} ({self.reference or 'no ref'})"
+
+
+class OrderLine(models.Model):
+    """
+    One line of an order: a quantity of a recipe (dish). unit_selling_price_snapshot
+    freezes the recipe's selling price at order time (same principle as the cost
+    snapshot on StockMovement) so later menu-price changes do not rewrite past orders.
+    """
+
+    order = models.ForeignKey(
+        Order,
+        on_delete=models.CASCADE,
+        related_name='lines',
+    )
+    recipe = models.ForeignKey(
+        'recipes.Recipe',
+        on_delete=models.PROTECT,
+        related_name='order_lines',
+    )
+    quantity = models.PositiveIntegerField(
+        validators=[MinValueValidator(1)],
+        help_text='Number of dishes ordered (whole portions).',
+    )
+    unit_selling_price_snapshot = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text='Recipe selling price per portion, frozen at order time. Null if '
+                  'the recipe had no selling price set.',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.quantity} x {self.recipe.name}"

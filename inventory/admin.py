@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Unit, Category, Product, PurchasePrice, StockMovement
+from .models import Unit, Category, Product, PurchasePrice, StockMovement, Order, OrderLine
 
 
 @admin.register(Unit)
@@ -63,3 +63,26 @@ class StockMovementAdmin(admin.ModelAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return False
+
+
+class OrderLineInline(admin.TabularInline):
+    model = OrderLine
+    extra = 0
+    readonly_fields = ('recipe', 'quantity', 'unit_selling_price_snapshot', 'created_at')
+
+
+@admin.register(Order)
+class OrderAdmin(admin.ModelAdmin):
+    list_display = ('id', 'reference', 'placed_by', 'placed_at')
+    list_filter = ('placed_at',)
+    search_fields = ('reference', 'notes')
+    readonly_fields = ('placed_by', 'placed_at')
+    inlines = [OrderLineInline]
+
+
+@admin.register(OrderLine)
+class OrderLineAdmin(admin.ModelAdmin):
+    list_display = ('order', 'recipe', 'quantity', 'unit_selling_price_snapshot', 'created_at')
+    list_filter = ('created_at',)
+    search_fields = ('recipe__name', 'order__reference')
+    readonly_fields = ('created_at',)

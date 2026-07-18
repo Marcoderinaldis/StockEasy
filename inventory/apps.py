@@ -7,10 +7,15 @@ class InventoryConfig(AppConfig):
 
     def ready(self):
         from auditlog.registry import auditlog
-        from .models import Unit, Category, Product, PurchasePrice, StockMovement
+        from .models import (
+            Unit, Category, Product, PurchasePrice, StockMovement,
+            Order, OrderLine,
+        )
 
         auditlog.register(Unit)
         auditlog.register(Category)
         auditlog.register(Product)
         auditlog.register(PurchasePrice)
         auditlog.register(StockMovement)
+        auditlog.register(Order)
+        auditlog.register(OrderLine)
