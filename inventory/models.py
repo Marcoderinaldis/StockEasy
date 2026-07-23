@@ -135,6 +135,8 @@ class StockMovement(models.Model):
         ('Delivery damaged', 'Delivery Damaged'),
         ('Counting error', 'Counting Error'),
         ('Spillage/accidental waste', 'Spillage/Accidental Waste'),
+        ('Prepared dish wasted', 'Prepared Dish Wasted'),
+        ('Preparation error', 'Preparation Error'),
         ('Void—entered in error', 'Void—Entered in Error'),
         ('Other', 'Other'),
     ]
