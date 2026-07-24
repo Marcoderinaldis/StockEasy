@@ -137,6 +137,7 @@ class StockMovement(models.Model):
         ('Spillage/accidental waste', 'Spillage/Accidental Waste'),
         ('Prepared dish wasted', 'Prepared Dish Wasted'),
         ('Preparation error', 'Preparation Error'),
+        ('Stock take adjustment', 'Stock Take Adjustment'),
         ('Void—entered in error', 'Void—Entered in Error'),
         ('Other', 'Other'),
     ]
@@ -260,3 +261,107 @@ class OrderLine(models.Model):
 
     def __str__(self):
         return f"{self.quantity} x {self.recipe.name}"
+
+
+class StockTake(models.Model):
+    """
+    A physical stock count and its reconciliation.
+
+    Counts are recorded first without changing stock; applying the stock take then
+    writes ADJUSTMENT movements for the discrepancies found. Manager/admin only.
+    Discrepancies are always product-level — this is a reconciliation of stock, not
+    an assessment of people.
+
+    A stock-take discrepancy has an unknown cause (theft, unrecorded waste, delivery
+    error, miscount) — labelling it 'Counting error' would assert a cause we do not
+    know. Hence the separate 'Stock take adjustment' category.
+
+    A mistaken stock take is not voided; it is corrected by performing another
+    stock take, which is itself recorded.
+    """
+
+    reference = models.CharField(
+        max_length=50,
+        blank=True,
+        null=True,
+        help_text='Free-text label, e.g. a count reference or date.',
+    )
+    notes = models.CharField(max_length=200, blank=True, null=True)
+    counted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='stock_takes_counted',
+    )
+    started_at = models.DateTimeField(auto_now_add=True)
+    applied_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text='Set when the count is applied and adjustment movements are '
+                  'written. Null while the count is still a draft.',
+    )
+
+    class Meta:
+        ordering = ['-started_at']
+
+    @property
+    def is_applied(self):
+        return self.applied_at is not None
+
+    def __str__(self):
+        return f"Stock take #{self.pk} ({self.reference or 'no ref'})"
+
+
+class StockTakeLine(models.Model):
+    """
+    One product's count within a stock take.
+
+    system_quantity_snapshot freezes what the system believed at the moment the
+    count was recorded, so the discrepancy reflects what the counter actually saw.
+    The discrepancy is applied as a delta, preserving any legitimate movements
+    recorded between counting and applying.
+    """
+
+    stock_take = models.ForeignKey(
+        StockTake,
+        on_delete=models.CASCADE,
+        related_name='lines',
+    )
+    product = models.ForeignKey(
+        Product,
+        on_delete=models.PROTECT,
+        related_name='stock_take_lines',
+    )
+    system_quantity_snapshot = models.DecimalField(
+        max_digits=10,
+        decimal_places=4,
+        help_text='System stock at the moment this line was created.',
+    )
+    counted_quantity = models.DecimalField(
+        max_digits=10,
+        decimal_places=4,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(0)],
+        help_text='Physically counted quantity, in the product unit. Null until counted.',
+    )
+    discrepancy = models.DecimalField(
+        max_digits=10,
+        decimal_places=4,
+        null=True,
+        blank=True,
+        help_text='counted_quantity minus system_quantity_snapshot, stored when the '
+                  'stock take is applied.',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['stock_take', 'product'],
+                name='unique_product_per_stock_take',
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.product.name}: counted {self.counted_quantity}"

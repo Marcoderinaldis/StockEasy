@@ -1,5 +1,8 @@
 from django.contrib import admin
-from .models import Unit, Category, Product, PurchasePrice, StockMovement, Order, OrderLine
+from .models import (
+    Unit, Category, Product, PurchasePrice, StockMovement,
+    Order, OrderLine, StockTake, StockTakeLine,
+)
 
 
 @admin.register(Unit)
@@ -85,4 +88,27 @@ class OrderLineAdmin(admin.ModelAdmin):
     list_display = ('order', 'recipe', 'quantity', 'unit_selling_price_snapshot', 'created_at')
     list_filter = ('created_at',)
     search_fields = ('recipe__name', 'order__reference')
+    readonly_fields = ('created_at',)
+
+
+class StockTakeLineInline(admin.TabularInline):
+    model = StockTakeLine
+    extra = 0
+    readonly_fields = ('product', 'system_quantity_snapshot', 'counted_quantity', 'discrepancy', 'created_at')
+
+
+@admin.register(StockTake)
+class StockTakeAdmin(admin.ModelAdmin):
+    list_display = ('id', 'reference', 'counted_by', 'started_at', 'applied_at')
+    list_filter = ('started_at', 'applied_at')
+    search_fields = ('reference', 'notes')
+    readonly_fields = ('counted_by', 'started_at', 'applied_at')
+    inlines = [StockTakeLineInline]
+
+
+@admin.register(StockTakeLine)
+class StockTakeLineAdmin(admin.ModelAdmin):
+    list_display = ('stock_take', 'product', 'system_quantity_snapshot', 'counted_quantity', 'discrepancy', 'created_at')
+    list_filter = ('created_at',)
+    search_fields = ('product__name', 'stock_take__reference')
     readonly_fields = ('created_at',)

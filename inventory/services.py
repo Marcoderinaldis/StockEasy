@@ -104,14 +104,14 @@ def record_movement(
     reference_id=None,
 ):
     """
-    Record a stock movement (IN, OUT, or SALE) and update product stock atomically.
+    Record a stock movement and update product stock atomically.
 
     This is the core service function for staff stock recording.
     Creates an append-only StockMovement record.
 
     Args:
         product: Product instance
-        movement_type: 'IN', 'OUT', or 'SALE'
+        movement_type: 'IN', 'OUT', 'SALE', 'ADJUSTMENT_IN', or 'ADJUSTMENT_OUT'
         quantity: Decimal quantity in the specified unit
         unit: Unit instance for the quantity
         reason_category: Optional reason (required for OUT)
@@ -124,12 +124,13 @@ def record_movement(
 
     Raises:
         StockValidationError: If validation fails
-        InsufficientStockError: If OUT/SALE would make stock negative
+        InsufficientStockError: If OUT/SALE/ADJUSTMENT_OUT would make stock negative
         UnitTypeMismatchError: If unit types don't match
     """
-    if movement_type not in ('IN', 'OUT', 'SALE'):
+    if movement_type not in ('IN', 'OUT', 'SALE', 'ADJUSTMENT_IN', 'ADJUSTMENT_OUT'):
         raise StockValidationError(
-            f'Invalid movement type: {movement_type}. Must be IN, OUT, or SALE.'
+            f'Invalid movement type: {movement_type}. '
+            f'Must be IN, OUT, SALE, ADJUSTMENT_IN, or ADJUSTMENT_OUT.'
         )
 
     quantity_decimal = _quantize_quantity(quantity)
@@ -149,7 +150,7 @@ def record_movement(
     with transaction.atomic():
         locked_product = Product.objects.select_for_update().get(pk=product.pk)
 
-        if movement_type in ('OUT', 'SALE'):
+        if movement_type in ('OUT', 'SALE', 'ADJUSTMENT_OUT'):
             new_stock = _quantize_quantity(
                 locked_product.stock_quantity - quantity_in_product_unit
             )
@@ -161,6 +162,7 @@ def record_movement(
                 )
             locked_product.stock_quantity = new_stock
         else:
+            # IN, ADJUSTMENT_IN increment stock
             locked_product.stock_quantity = _quantize_quantity(
                 locked_product.stock_quantity + quantity_in_product_unit
             )
@@ -544,12 +546,24 @@ def record_adjustment_in(product, quantity, reason_category, reason_notes, user,
         reason_category: One of StockMovement.REASON_CATEGORY_CHOICES
         reason_notes: Optional notes (do not include personal names)
         user: CustomUser who recorded this adjustment
-        reference_id: Optional reference (e.g., adjustment ticket)
+        reference_id: Optional reference (e.g., stock take ID)
 
     Returns:
         StockMovement: The created movement record
+
+    Raises:
+        StockValidationError: If quantity is not positive
     """
-    raise NotImplementedError("To be implemented in a future unit")
+    return record_movement(
+        product=product,
+        movement_type='ADJUSTMENT_IN',
+        quantity=quantity,
+        unit=product.unit,
+        reason_category=reason_category,
+        reason_notes=reason_notes,
+        user=user,
+        reference_id=reference_id,
+    )
 
 
 def record_adjustment_out(product, quantity, reason_category, reason_notes, user, reference_id=None):
@@ -562,12 +576,25 @@ def record_adjustment_out(product, quantity, reason_category, reason_notes, user
         reason_category: One of StockMovement.REASON_CATEGORY_CHOICES
         reason_notes: Optional notes (do not include personal names)
         user: CustomUser who recorded this adjustment
-        reference_id: Optional reference (e.g., adjustment ticket)
+        reference_id: Optional reference (e.g., stock take ID)
 
     Returns:
         StockMovement: The created movement record
+
+    Raises:
+        StockValidationError: If quantity is not positive
+        InsufficientStockError: If adjustment would make stock negative
     """
-    raise NotImplementedError("To be implemented in a future unit")
+    return record_movement(
+        product=product,
+        movement_type='ADJUSTMENT_OUT',
+        quantity=quantity,
+        unit=product.unit,
+        reason_category=reason_category,
+        reason_notes=reason_notes,
+        user=user,
+        reference_id=reference_id,
+    )
 
 
 def place_order(lines_data, user, reference=None, notes=None):
