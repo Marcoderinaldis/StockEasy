@@ -463,7 +463,7 @@ class AtomicityVoidTests(TransactionTestCase):
         stock_after_in = self.product.stock_quantity
         initial_void_count = StockMovement.objects.filter(movement_type='VOID').count()
 
-        with patch('inventory.services.StockMovement.objects.create') as mock_create:
+        with patch('inventory.services.corrections.StockMovement.objects.create') as mock_create:
             mock_create.side_effect = IntegrityError('Simulated failure')
 
             with self.assertRaises(IntegrityError):

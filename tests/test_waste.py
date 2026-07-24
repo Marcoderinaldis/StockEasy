@@ -337,7 +337,7 @@ class AtomicityTests(TransactionTestCase):
         initial_waste_count = WasteRecord.objects.count()
 
         # Patch WasteRecord.objects.create to raise an error
-        with patch('waste.services.WasteRecord.objects.create') as mock_create:
+        with patch('waste.services.recording.WasteRecord.objects.create') as mock_create:
             mock_create.side_effect = IntegrityError('Simulated failure')
 
             with self.assertRaises(IntegrityError):
