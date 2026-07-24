@@ -43,6 +43,12 @@ from .stock_take import (
     preview_stock_take,
     apply_stock_take,
 )
+from .analytics import (
+    K_ANON_MIN,
+    ALLOWED_VARIANCE_DIMENSIONS,
+    usage_variance_by,
+    usage_variance_summary,
+)
 
 __all__ = [
     # Exceptions
@@ -78,4 +84,9 @@ __all__ = [
     'record_counts',
     'preview_stock_take',
     'apply_stock_take',
+    # Variance Analytics
+    'K_ANON_MIN',
+    'ALLOWED_VARIANCE_DIMENSIONS',
+    'usage_variance_by',
+    'usage_variance_summary',
 ]
