@@ -21,6 +21,7 @@ from .services import (
     UnitTypeMismatchError,
     VOIDABLE_MOVEMENT_TYPES,
     CORRECTABLE_MOVEMENT_TYPES,
+    products_below_reorder_level,
 )
 
 
@@ -335,4 +336,22 @@ def void_dashboard(request):
         'form': form,
         'voidable_page': voidable_page,
         'history_page': history_page,
+    })
+
+
+@login_required
+def low_stock(request):
+    """
+    Products at or below their reorder level — what needs reordering.
+
+    Read-only list showing active products whose stock has fallen to or below
+    their configured reorder threshold. Products with reorder_level of 0 are
+    not tracked for reordering and are excluded.
+
+    Accessible to all authenticated users (staff need to know what to reorder).
+    """
+    products = products_below_reorder_level()
+    return render(request, 'inventory/low_stock.html', {
+        'products': products,
+        'count': products.count(),
     })

@@ -18,6 +18,9 @@
         <li class="nav-item">
           <a class="nav-link" href="{% url 'inventory:movements_list' %}">Movements</a>
         </li>
+        <li class="nav-item">
+          <a class="nav-link" href="{% url 'inventory:low_stock' %}">Low stock</a>
+        </li>
         {% endif %}
         {% if user.is_manager %}
         <li class="nav-item">

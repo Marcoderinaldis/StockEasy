@@ -48,6 +48,7 @@ from .analytics import (
     ALLOWED_VARIANCE_DIMENSIONS,
     usage_variance_by,
     usage_variance_summary,
+    products_below_reorder_level,
 )
 
 __all__ = [
@@ -89,4 +90,6 @@ __all__ = [
     'ALLOWED_VARIANCE_DIMENSIONS',
     'usage_variance_by',
     'usage_variance_summary',
+    # Stock Level Queries
+    'products_below_reorder_level',
 ]

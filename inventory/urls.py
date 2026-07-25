@@ -12,4 +12,5 @@ urlpatterns = [
     path('movements/<int:pk>/void/', views.void_movement_view, name='void_movement'),
     path('movements/<int:pk>/correct/', views.correct_movement_view, name='correct_movement'),
     path('void-dashboard/', views.void_dashboard, name='void_dashboard'),
+    path('low-stock/', views.low_stock, name='low_stock'),
 ]

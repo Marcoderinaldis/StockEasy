@@ -358,3 +358,33 @@ def usage_variance_summary(date_from=None, date_to=None, product=None):
         'unvalued_movement_count': unvalued_movement_count,
         'k_anon_min': K_ANON_MIN,
     }
+
+
+# ---------------------------------------------------------------------------
+# Stock level queries
+# ---------------------------------------------------------------------------
+
+def products_below_reorder_level():
+    """
+    Return active products whose stock is at or below their reorder level.
+
+    A reorder level of zero means the product is not tracked for reordering and is
+    excluded. This prevents products simply sitting at zero (with no threshold set)
+    from flooding the list. Read-only.
+
+    Returns:
+        QuerySet of Product objects annotated with 'shortfall' (reorder_level minus
+        stock_quantity), ordered by shortfall descending (most urgent first). Each
+        product includes select_related unit and category.
+    """
+    from inventory.models import Product
+
+    return Product.objects.filter(
+        is_active=True,
+        reorder_level__gt=0,
+        stock_quantity__lte=F('reorder_level'),
+    ).select_related(
+        'unit', 'category'
+    ).annotate(
+        shortfall=F('reorder_level') - F('stock_quantity')
+    ).order_by('-shortfall', 'name')
